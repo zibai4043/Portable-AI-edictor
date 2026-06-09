@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>代码编辑器 — 随身AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--b:#000;--w:#fff;--g1:#f7f7f7;--g2:#e5e5e5;--g4:#a3a3a3}
+body{font-family:-apple-system,sans-serif;background:var(--w);display:flex;flex-direction:column;height:100vh;overflow:hidden;color:var(--b)}
+.hd{padding:0 8px;border-bottom:1px solid var(--g2);display:flex;align-items:center;gap:6px;height:44px;flex-shrink:0}
+.bk{background:none;border:none;font-size:18px;cursor:pointer;color:var(--b);padding:3px 6px;line-height:1}
+.bk:hover{color:var(--g4)}
+.tt{font-size:15px;font-weight:600;flex:1}
+.run{background:var(--b);color:var(--w);border:none;padding:7px 12px;font-size:13px;cursor:pointer;transition:opacity 0.2s;white-space:nowrap}
+.run:hover{opacity:0.8}
+.run:disabled{opacity:0.4;cursor:not-allowed}
+.lang{border:1px solid var(--g2);background:var(--w);color:var(--b);padding:5px 6px;font-size:12px;cursor:pointer;max-width:96px}
+.pkg-btn{background:none;border:1px solid var(--g2);color:var(--b);padding:5px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
+.pkg-btn:hover{border-color:var(--b)}
+.ed-wrap{flex:1 1 0;min-height:0}
+#editor{width:100%;height:100%}
+.out-wrap{flex:1 1 0;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--g2);overflow:hidden}
+.out-hd{padding:4px 12px;border-bottom:1px solid var(--g2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.tabs{display:flex;gap:4px}
+.tab{background:none;border:none;font-size:12px;color:var(--g4);cursor:pointer;padding:4px 8px;border-bottom:2px solid transparent}
+.tab.on{color:var(--b);border-bottom-color:var(--b)}
+.clr{background:none;font-size:12px;color:var(--g4);cursor:pointer;padding:2px 8px;border:1px solid var(--g2)}
+.clr:hover{color:var(--b)}
+#outPane{flex:1 1 0;min-height:0;overflow-y:auto;padding:8px 12px;font-family:monospace;font-size:12px;line-height:1.55;background:var(--g1)}
+#prevPane{flex:1 1 0;min-height:0;width:100%;border:none;background:var(--w);display:none}
+#filePane{flex:1 1 0;min-height:0;display:none;overflow-y:auto;background:var(--w);padding:10px 12px}
+.out-log{color:var(--b)}.out-err{color:#c00}.out-warn{color:#a60}.out-info{color:var(--g4)}
+.panel-actions{display:flex;align-items:center;gap:8px}
+.ai-btn{background:var(--w);border:1px solid var(--b);color:var(--b);padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;transition:background 0.2s;white-space:nowrap}
+.ai-btn:hover{background:var(--g1)}
+.file-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.file-title{font-size:13px;font-weight:600}
+.file-actions{display:flex;gap:8px}
+.file-btn{border:1px solid var(--g2);background:var(--w);padding:6px 10px;font-size:12px;cursor:pointer}
+.file-list{display:flex;flex-direction:column;gap:8px}
+.file-item{display:flex;align-items:center;gap:10px;border:1px solid var(--g2);padding:10px 12px;cursor:pointer;background:var(--w)}
+.file-item.on{border-color:var(--b);box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.file-dot{width:8px;height:8px;border-radius:50%;background:var(--g2);flex-shrink:0}
+.file-item.on .file-dot{background:var(--b)}
+.file-main{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-meta{font-size:11px;color:var(--g4);margin-top:2px}
+.file-del{border:none;background:transparent;color:#c00;font-size:16px;line-height:1;cursor:pointer;padding:4px}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:flex-end}
+.modal.on{display:flex}
+.mbx{background:var(--w);width:100%;max-height:75vh;overflow-y:auto;padding:20px}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.mt{font-size:16px;font-weight:600}
+.mc{background:none;border:none;font-size:24px;color:var(--g4);cursor:pointer;line-height:1}
+.msub{font-size:12px;color:var(--g4);margin-bottom:16px}
+.pi{display:flex;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--g2);gap:12px}
+.pi:last-child{border-bottom:none}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.dot.on{background:#22c55e}.dot.off{background:var(--g2)}
+.pn{flex:1}
+.pname{font-size:14px;font-weight:500}
+.pmeta{font-size:12px;color:var(--g4);margin-top:2px}
+.cfg-row{display:flex;gap:6px;margin-top:8px}
+.cfg-inp{flex:1;padding:7px 8px;border:1px solid var(--g2);font-size:12px;background:var(--w)}
+.cfg-inp:focus{outline:none;border-color:var(--b)}
+.cfg-save{background:var(--b);color:var(--w);border:none;padding:7px 12px;font-size:12px;cursor:pointer}
+.pdl{border:none;padding:8px 12px;font-size:13px;cursor:pointer;transition:opacity 0.2s;white-space:nowrap;flex-shrink:0}
+.pdl:hover{opacity:0.8}.pdl:disabled{opacity:0.5;cursor:not-allowed}
+.pdl.inst{background:var(--b);color:var(--w)}
+.pdl.del{background:var(--w);border:1px solid var(--g2);color:#c00}
+.pdl.loading{background:var(--g2);color:var(--g4)}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid var(--g2);border-top-color:var(--g4);border-radius:50%;animation:sp 0.6s linear infinite;margin-right:5px;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* 现代化操作区与插件面板微交互 */
+:root{
+  --radius-sm:8px;
+  --shadow-sm:0 2px 8px rgba(0,0,0,0.04);
+  --transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--g2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--g4)}
+.hd{
+  border-bottom:none;
+  box-shadow:0 1px 4px rgba(0,0,0,0.05);
+  background:var(--w);
+  z-index:10;
+}
+.lang{
+  border-radius:6px;
+  transition:var(--transition);
+  outline:none;
+}
+.lang:focus{border-color:var(--b)}
+.run,.pkg-btn{
+  border-radius:6px;
+  font-weight:500;
+  transition:var(--transition);
+}
+.run:hover:not(:disabled),.pkg-btn:hover{
+  transform:translateY(-1px);
+  box-shadow:var(--shadow-sm);
+}
+.out-hd{
+  background:var(--g1);
+  border-bottom:1px solid var(--g2);
+}
+.tabs{
+  gap:16px;
+  margin-left:8px;
+}
+.tab{
+  padding:8px 4px;
+  font-weight:500;
+  transition:color 0.2s,border-color 0.2s;
+}
+.tab.on{border-bottom-width:3px}
+.pi{
+  padding:16px;
+  border:1px solid var(--g2);
+  border-radius:var(--radius-sm);
+  margin-bottom:12px;
+  transition:var(--transition);
+}
+.pi:last-child{border-bottom:1px solid var(--g2)}
+.pi:hover{
+  border-color:var(--g4);
+  background:var(--g1);
+  box-shadow:var(--shadow-sm);
+}
+.pdl,.cfg-inp,.cfg-save{border-radius:6px}
+.file-btn,.file-item{border-radius:6px;transition:var(--transition)}
+.file-btn:hover,.file-item:hover{border-color:var(--g4);background:var(--g1)}
+.ui-box{padding:20px;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.15)}
+.ui-input{width:100%;padding:12px;border:1px solid var(--g2);border-radius:8px;font-size:14px;background:var(--w);outline:none;margin:4px 0 16px}
+.ui-input:focus{border-color:var(--b)}
+.ui-actions{display:flex;gap:10px;margin-top:16px}
+.ui-btn{flex:1;border:1px solid var(--g2);background:var(--w);color:var(--b);padding:11px 14px;border-radius:8px;font-size:14px;cursor:pointer;transition:var(--transition)}
+.ui-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.ui-btn.primary{background:var(--b);border-color:var(--b);color:var(--w)}
+.ui-btn.danger{background:#b91c1c;border-color:#b91c1c;color:var(--w)}
+</style>
+</head>
+<body>
+<div class="hd">
+  <button class="bk" onclick="location.href='index.html'">←</button>
+  <div class="tt">编辑器</div>
+  <select class="lang" id="lang" onchange="setLang()">
+    <option value="javascript">JavaScript</option>
+    <option value="python">Python</option>
+    <option value="typescript">TypeScript</option>
+    <option value="c">C</option>
+    <option value="cpp">C++</option>
+    <option value="html">HTML</option>
+    <option value="css">CSS</option>
+    <option value="json">JSON</option>
+  </select>
+  <button class="pkg-btn" onclick="openPkg()">插件</button>
+  <button class="run" id="runBtn" onclick="runCode()">▶ 运行</button>
+</div>
+<div class="ed-wrap"><div id="editor"></div></div>
+<div class="out-wrap">
+  <div class="out-hd">
+    <div class="tabs">
+      <button class="tab on" id="tabOut" onclick="switchTab('out')">输出</button>
+      <button class="tab" id="tabPrev" onclick="switchTab('prev')">预览</button>
+      <button class="tab" id="tabFiles" onclick="switchTab('files')">文件</button>
+    </div>
+    <div class="panel-actions">
+      <button class="clr" onclick="clearOut()">清空</button>
+      <button class="ai-btn" id="footerBtn" onclick="runFooterAction()">发给 AI 调试</button>
+    </div>
+  </div>
+  <div id="outPane"><span class="out-info">— 点击运行查看输出 —</span></div>
+  <iframe id="prevPane" sandbox="allow-scripts allow-same-origin"></iframe>
+  <div id="filePane">
+    <div class="file-bar">
+      <div class="file-title">项目文件</div>
+      <div class="file-actions">
+        <button class="file-btn" onclick="newFile()">新建</button>
+      </div>
+    </div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+</div>
+
+<div class="modal" id="pkgModal" onclick="if(event.target.id==='pkgModal')closePkg()">
+  <div class="mbx">
+    <div class="mh"><div class="mt">语言插件</div><button class="mc" onclick="closePkg()">×</button></div>
+    <div class="msub">本地插件下载后缓存离线可用；C/C++ 使用本地解释器插件，无需实例地址</div>
+    <div id="pkgList"></div>
+  </div>
+</div>
+
+<div class="modal" id="uiModal" onclick="if(event.target.id==='uiModal')closeUiModal(false)">
+  <div class="mbx ui-box">
+    <div class="mh"><div class="mt" id="uiTitle">确认</div><button class="mc" onclick="closeUiModal(false)">×</button></div>
+    <div class="msub" id="uiMsg"></div>
+    <input class="ui-input" id="uiInput">
+    <div class="ui-actions">
+      <button class="ui-btn" id="uiCancel" onclick="closeUiModal(false)">取消</button>
+      <button class="ui-btn primary" id="uiOk" onclick="closeUiModal(true)">确定</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>
+let editor, outLines=[], pyodide=null, tsLoaded=false, cppLoaded=false;
+let files=[], currentFileId=null, suppressEditorChange=false;
+let activeTab='out';
+let uiResolve=null;
+
+const PLUGINS=[
+  {id:'javascript',name:'JavaScript',size:'内置',note:'本地执行 · V8 引擎',cdn:null},
+  {id:'python',name:'Python 3',size:'~22MB',note:'本地执行 · Pyodide WebAssembly',cdn:'pyodide'},
+  {id:'typescript',name:'TypeScript',size:'~5MB',note:'本地执行 · 编译后 eval',cdn:'ts'},
+  {id:'html',name:'HTML 预览',size:'内置',note:'本地 iframe 预览',cdn:null},
+  {id:'c_cpp',name:'C/C++ 本地解释器',size:'~0.6MB',note:'本地执行 · JSCPP 轻量运行时',cdn:'jscpp'},
+];
+
+const isBuiltin=id=>['javascript','html','css','json'].includes(id);
+const isInst=id=>isBuiltin(id)||!!localStorage.getItem('plugin_'+id);
+const setInst=(id,v)=>v?localStorage.setItem('plugin_'+id,'1'):localStorage.removeItem('plugin_'+id);
+const hasCppPlugin=()=>isInst('c_cpp')||isInst('c');
+const PLUGIN_CACHE='portable_ai_plugin_cache_v1';
+const JSCPP_URL='https://cdn.jsdelivr.net/gh/felixhao28/JSCPP@gh-pages/dist/JSCPP.es5.min.js';
+const JSCPP_STORE_KEY='plugin_asset_c_cpp_jscpp';
+const LANG_EXT={javascript:'js',python:'py',typescript:'ts',c:'c',cpp:'cpp',html:'html',css:'css',json:'json'};
+const EXT_LANG={js:'javascript',mjs:'javascript',py:'python',ts:'typescript',c:'c',h:'c',cpp:'cpp',cc:'cpp',cxx:'cpp',hpp:'cpp',html:'html',css:'css',json:'json'};
+
+function openUiModal(opt){
+  const modal=document.getElementById('uiModal'),input=document.getElementById('uiInput'),ok=document.getElementById('uiOk'),cancel=document.getElementById('uiCancel');
+  document.getElementById('uiTitle').textContent=opt.title||'确认';
+  document.getElementById('uiMsg').textContent=opt.message||'';
+  input.style.display=opt.input?'block':'none';
+  input.value=opt.value||'';
+  ok.textContent=opt.okText||'确定';
+  cancel.textContent=opt.cancelText||'取消';
+  cancel.style.display=opt.alert?'none':'block';
+  ok.className='ui-btn '+(opt.danger?'danger':'primary');
+  modal.classList.add('on');
+  if(opt.input)setTimeout(()=>input.focus(),60);
+  return new Promise(resolve=>{uiResolve={resolve,opt}});
+}
+function closeUiModal(ok){
+  const state=uiResolve;
+  document.getElementById('uiModal').classList.remove('on');
+  uiResolve=null;
+  if(!state)return;
+  const input=document.getElementById('uiInput');
+  if(state.opt.alert){state.resolve(true);return}
+  state.resolve(ok?(state.opt.input?input.value:true):null);
+}
+function uiPrompt(title,message,value){return openUiModal({title,message,value,input:true,okText:'创建'});}
+function uiConfirm(title,message,danger){return openUiModal({title,message,danger:!!danger,okText:danger?'删除':'确定'});}
+function uiAlert(title,message){return openUiModal({title,message,alert:true,okText:'知道了'});}
+
+require.config({paths:{vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+require(['vs/editor/editor.main'],function(){
+  initFiles();
+  const file=currentFile();
+  document.getElementById('lang').value=file.lang;
+  editor=monaco.editor.create(document.getElementById('editor'),{
+    value:file.content,language:monacoLang(file.lang),theme:'vs',fontSize:13,
+    lineNumbers:'on',lineNumbersMinChars:3,lineDecorationsWidth:6,glyphMargin:false,folding:false,
+    minimap:{enabled:false},scrollBeyondLastLine:false,
+    automaticLayout:true,wordWrap:'on',padding:{top:8,bottom:8}
+  });
+  editor.onDidChangeModelContent(()=>{
+    if(suppressEditorChange)return;
+    saveCurrentFile();
+    renderFiles();
+  });
+  receivePendingEditorCode();
+  renderFiles();
+});
+
+function setLang(){
+  const lang=document.getElementById('lang').value;
+  const file=currentFile();
+  if(file){
+    file.lang=lang;
+    saveFiles();
+    renderFiles();
+  }
+  localStorage.setItem('editor_lang',lang);
+  if(editor)monaco.editor.setModelLanguage(editor.getModel(),monacoLang(lang));
+}
+
+function switchTab(t){
+  activeTab=t;
+  document.getElementById('tabOut').classList.toggle('on',t==='out');
+  document.getElementById('tabPrev').classList.toggle('on',t==='prev');
+  document.getElementById('tabFiles').classList.toggle('on',t==='files');
+  document.getElementById('outPane').style.display=t==='out'?'':'none';
+  document.getElementById('prevPane').style.display=t==='prev'?'block':'none';
+  document.getElementById('filePane').style.display=t==='files'?'block':'none';
+  if(t==='prev')document.getElementById('prevPane').style.flex='1';
+  if(t==='files')renderFiles();
+  updateFooterAction();
+}
+
+function updateFooterAction(){
+  const btn=document.getElementById('footerBtn');
+  if(!btn)return;
+  btn.textContent=activeTab==='files'?'导出当前文件':'发给 AI 调试';
+}
+
+function runFooterAction(){
+  if(activeTab==='files')exportCurrentFile();
+  else sendToAI();
+}
+
+function addOut(text,type){
+  outLines.push({text,type});
+  const el=document.getElementById('outPane');
+  const d=document.createElement('div');
+  d.className='out-'+type;d.textContent=text;
+  if(outLines.length===1)el.innerHTML='';
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+function clearOut(){
+  outLines=[];
+  document.getElementById('outPane').innerHTML='<span class="out-info">— 点击运行查看输出 —</span>';
+  document.getElementById('prevPane').srcdoc='';
+  switchTab('out');
+}
+
+function initFiles(){
+  const raw=localStorage.getItem('editor_files');
+  if(raw)try{files=JSON.parse(raw)}catch{files=[]}
+  if(!Array.isArray(files)||!files.length){
+    const lang=localStorage.getItem('editor_lang')||'javascript';
+    const content=localStorage.getItem('editor_code')||'// 在这里写代码\nconsole.log("Hello, 随身AI!");\n';
+    files=[{id:Date.now().toString(),name:'main.'+(LANG_EXT[lang]||'txt'),lang,content,updated:new Date().toISOString()}];
+  }
+  currentFileId=localStorage.getItem('editor_current_file')||files[0].id;
+  if(!files.some(f=>f.id===currentFileId))currentFileId=files[0].id;
+  saveFiles();
+}
+
+function currentFile(){
+  return files.find(f=>f.id===currentFileId)||files[0];
+}
+
+function saveFiles(){
+  localStorage.setItem('editor_files',JSON.stringify(files));
+  if(currentFileId)localStorage.setItem('editor_current_file',currentFileId);
+}
+
+function saveCurrentFile(){
+  const file=currentFile();
+  if(!file||!editor)return;
+  file.content=editor.getValue();
+  file.updated=new Date().toISOString();
+  localStorage.setItem('editor_code',file.content);
+  localStorage.setItem('editor_lang',file.lang);
+  saveFiles();
+}
+
+function switchFile(id){
+  if(id===currentFileId)return;
+  saveCurrentFile();
+  const file=files.find(f=>f.id===id);
+  if(!file)return;
+  currentFileId=id;
+  localStorage.setItem('editor_current_file',id);
+  document.getElementById('lang').value=file.lang;
+  if(editor){
+    suppressEditorChange=true;
+    editor.setValue(file.content||'');
+    monaco.editor.setModelLanguage(editor.getModel(),monacoLang(file.lang));
+    suppressEditorChange=false;
+  }
+  renderFiles();
+}
+
+async function newFile(){
+  saveCurrentFile();
+  const name=await uiPrompt('新建文件','输入文件名，系统会根据扩展名自动识别语言。','main.'+(LANG_EXT[document.getElementById('lang').value]||'txt'));
+  const clean=(name||'').trim();
+  if(!clean)return;
+  const lang=langFromName(clean)||document.getElementById('lang').value||'javascript';
+  const file={id:Date.now().toString(),name:clean,lang,content:templateForLang(lang),updated:new Date().toISOString()};
+  const prevId=currentFileId;
+  files.push(file);
+  saveFiles();
+  currentFileId=prevId;
+  switchFile(file.id);
+  switchTab('files');
+}
+
+function createFile(name,lang,content){
+  saveCurrentFile();
+  const file={id:Date.now().toString(),name,lang,content,updated:new Date().toISOString()};
+  const prevId=currentFileId;
+  files.push(file);
+  saveFiles();
+  currentFileId=prevId;
+  switchFile(file.id);
+  return file;
+}
+
+function receivePendingEditorCode(){
+  const raw=localStorage.getItem('pending_editor_code');
+  if(!raw)return;
+  localStorage.removeItem('pending_editor_code');
+  let data=null;
+  try{data=JSON.parse(raw)}catch{return}
+  const lang=normalizeLang(data.lang)||'javascript';
+  if(data.mode==='replace'){
+    const file=currentFile();
+    if(file){
+      file.lang=lang;
+      file.content=data.code||'';
+      file.updated=new Date().toISOString();
+      document.getElementById('lang').value=lang;
+      if(editor){
+        suppressEditorChange=true;
+        editor.setValue(file.content);
+        monaco.editor.setModelLanguage(editor.getModel(),monacoLang(lang));
+        suppressEditorChange=false;
+      }
+      saveFiles();
+      addOut('✓ 已用 AI 代码替换当前文件：'+file.name,'log');
+      switchTab('files');
+      renderFiles();
+      return;
+    }
+  }
+  const name='ai-'+Date.now()+'.'+(LANG_EXT[lang]||'txt');
+  createFile(name,lang,data.code||'');
+  addOut('✓ 已从 AI 回复创建文件：'+name,'log');
+  switchTab('files');
+}
+
+async function deleteFile(id){
+  if(files.length<=1){await uiAlert('无法删除','至少保留一个文件。');return}
+  const file=files.find(f=>f.id===id);
+  if(!file||!await uiConfirm('删除文件','确定删除 '+file.name+'？',true))return;
+  files=files.filter(f=>f.id!==id);
+  if(currentFileId===id)currentFileId=files[0].id;
+  saveFiles();
+  const active=currentFile();
+  if(editor&&active){
+    suppressEditorChange=true;
+    editor.setValue(active.content||'');
+    monaco.editor.setModelLanguage(editor.getModel(),monacoLang(active.lang));
+    document.getElementById('lang').value=active.lang;
+    suppressEditorChange=false;
+  }
+  renderFiles();
+}
+
+function renderFiles(){
+  const el=document.getElementById('fileList');
+  if(!el)return;
+  el.innerHTML=files.map(f=>{
+    const on=f.id===currentFileId?'on':'';
+    const size=(f.content||'').length;
+    return `<div class="file-item ${on}" onclick="switchFile('${f.id}')"><div class="file-dot"></div><div class="file-main"><div class="file-name">${eh(f.name)}</div><div class="file-meta">${f.lang} · ${size} 字符 · ${formatTime(f.updated)}</div></div><button class="file-del" onclick="event.stopPropagation();deleteFile('${f.id}')">×</button></div>`;
+  }).join('');
+}
+
+function getRunSource(lang){
+  saveCurrentFile();
+  const file=currentFile();
+  if(!file)return '';
+  if(['c','cpp'].includes(lang))return buildCppSource(file);
+  return file.content||'';
+}
+
+function buildCppSource(entry){
+  const headers=files.filter(f=>f.id!==entry.id&&/\.(h|hpp)$/i.test(f.name));
+  const sources=files.filter(f=>f.id!==entry.id&&/\.(c|cc|cpp|cxx)$/i.test(f.name));
+  if(!headers.length&&!sources.length)return entry.content||'';
+  const headerNames=new Set(headers.map(f=>f.name));
+  const cleanLocalIncludes=code=>(code||'').replace(/^\s*#include\s+"([^"]+)"\s*$/gm,(m,n)=>headerNames.has(n)?'// '+m:m);
+  const parts=[];
+  headers.forEach(f=>parts.push('// ===== '+f.name+' =====\n'+(f.content||'')));
+  sources.forEach(f=>parts.push('// ===== '+f.name+' =====\n'+cleanLocalIncludes(f.content)));
+  parts.push('// ===== '+entry.name+' =====\n'+cleanLocalIncludes(entry.content));
+  return parts.join('\n\n');
+}
+
+function monacoLang(lang){
+  return lang==='cpp'?'cpp':lang;
+}
+
+function langFromName(name){
+  const ext=(name.split('.').pop()||'').toLowerCase();
+  return EXT_LANG[ext]||'';
+}
+
+function normalizeLang(lang){
+  const v=(lang||'').toLowerCase();
+  if(['js','javascript','node'].includes(v))return 'javascript';
+  if(['py','python'].includes(v))return 'python';
+  if(['ts','typescript'].includes(v))return 'typescript';
+  if(['c'].includes(v))return 'c';
+  if(['cpp','c++','cc','cxx'].includes(v))return 'cpp';
+  if(['html','xml'].includes(v))return 'html';
+  if(['css'].includes(v))return 'css';
+  if(['json'].includes(v))return 'json';
+  return '';
+}
+
+function templateForLang(lang){
+  if(lang==='python')return 'print("Hello, 随身AI!")\n';
+  if(lang==='typescript')return 'const msg: string = "Hello, 随身AI!";\nconsole.log(msg);\n';
+  if(lang==='c')return '#include <stdio.h>\n\nint main(){\n    printf("Hello, 随身AI!\\n");\n    return 0;\n}\n';
+  if(lang==='cpp')return '#include <iostream>\nusing namespace std;\n\nint main(){\n    cout << "Hello, 随身AI!" << endl;\n    return 0;\n}\n';
+  if(lang==='html')return '<!doctype html>\n<html>\n<body>\n  <h1>Hello, 随身AI!</h1>\n</body>\n</html>\n';
+  if(lang==='css')return 'body { font-family: sans-serif; }\n';
+  if(lang==='json')return '{\n  "message": "Hello, 随身AI!"\n}\n';
+  return 'console.log("Hello, 随身AI!");\n';
+}
+
+function formatTime(d){
+  if(!d)return '刚刚';
+  return new Date(d).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+}
+
+async function runCode(){
+  const lang=document.getElementById('lang').value;
+  clearOut();
+  saveCurrentFile();
+  const file=currentFile();
+  if(file)addOut('目标文件：'+file.name+'（'+lang+'）','info');
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span>运行中';
+  try{
+    if(lang==='javascript') runJS();
+    else if(lang==='python') await runPython();
+    else if(lang==='typescript') await runTS();
+    else if(lang==='html') runHTML();
+    else if(lang==='c') await runCppLocal('C');
+    else if(lang==='cpp') await runCppLocal('C++');
+    else{addOut('⚠ '+lang+' 暂不支持执行','warn');addOut('点"发给AI调试"让AI分析代码','info');}
+  }finally{btn.disabled=false;btn.innerHTML='▶ 运行';}
+}
+
+function runJS(){
+  const source=getRunSource('javascript');
+  const ol=console.log,oe=console.error,ow=console.warn;
+  console.log=(...a)=>{addOut(a.map(sv).join(' '),'log');ol(...a)};
+  console.error=(...a)=>{addOut('✗ '+a.map(sv).join(' '),'err');oe(...a)};
+  console.warn=(...a)=>{addOut('⚠ '+a.map(sv).join(' '),'warn');ow(...a)};
+  try{
+    const r=eval(source);
+    if(r!==undefined)addOut('→ '+sv(r),'info');
+    if(!outLines.length)addOut('（执行完成，无输出）','info');
+  }catch(e){
+    addOut('✗ '+e.message,'err');
+    (e.stack||'').split('\n').slice(1,3).forEach(l=>addOut('  '+l.trim(),'err'));
+  }finally{console.log=ol;console.error=oe;console.warn=ow;}
+}
+
+async function runPython(){
+  const source=getRunSource('python');
+  if(!isInst('python')){addOut('⚠ Python 插件未安装','warn');addOut('点"插件"→ 下载 Python（~22MB）','info');return;}
+  if(!pyodide){
+    addOut('ℹ 加载 Python 运行时，请稍候...','info');
+    try{pyodide=await loadPyodideLib();}
+    catch(e){addOut('✗ 加载失败：'+e.message,'err');return;}
+  }
+  try{
+    pyodide.setStdout({batched:t=>addOut(t,'log')});
+    pyodide.setStderr({batched:t=>addOut('✗ '+t,'err')});
+    const r=await pyodide.runPythonAsync(source);
+    if(r!=null)addOut('→ '+String(r),'info');
+    if(!outLines.filter(l=>l.type!=='info').length)addOut('（执行完成，无输出）','info');
+  }catch(e){addOut('✗ '+e.message,'err');}
+}
+
+async function runTS(){
+  const source=getRunSource('typescript');
+  if(!isInst('typescript')){addOut('⚠ TypeScript 插件未安装','warn');addOut('点"插件"→ 下载 TypeScript（~5MB）','info');return;}
+  if(!tsLoaded){
+    addOut('ℹ 加载 TypeScript 编译器...','info');
+    try{
+      await new Promise((ok,fail)=>{
+        const t=document.createElement('script');
+        t.src='https://cdn.jsdelivr.net/npm/typescript@5.4.5/lib/typescript.js';
+        t.onload=()=>{tsLoaded=true;ok()};t.onerror=fail;document.head.appendChild(t);
+      });
+    }catch(e){addOut('✗ 加载失败：'+e.message,'err');return;}
+  }
+  try{
+    const js=window.ts.transpileModule(source,{compilerOptions:{module:0}}).outputText;
+    const ol=console.log,oe=console.error;
+    console.log=(...a)=>{addOut(a.map(sv).join(' '),'log');ol(...a)};
+    console.error=(...a)=>{addOut('✗ '+a.map(sv).join(' '),'err');oe(...a)};
+    try{const r=eval(js);if(r!==undefined)addOut('→ '+sv(r),'info');}
+    finally{console.log=ol;console.error=oe;}
+    if(!outLines.length)addOut('（执行完成，无输出）','info');
+  }catch(e){addOut('✗ '+e.message,'err');}
+}
+
+function runHTML(){
+  document.getElementById('prevPane').srcdoc=getRunSource('html');
+  switchTab('prev');
+  addOut('ℹ HTML 预览已载入，点上方"预览"标签查看','info');
+}
+
+async function runCppLocal(langName){
+  const source=getRunSource(document.getElementById('lang').value);
+  if(!hasCppPlugin()){addOut('⚠ C/C++ 本地解释器插件未安装','warn');addOut('点"插件"→ 下载 C/C++ 本地解释器','info');return;}
+  try{
+    await loadCppPlugin();
+    let output='';
+    addOut('ℹ 使用本地解释器运行 '+langName+' 代码...','info');
+    const exitCode=window.JSCPP.run(source,'',{
+      stdio:{write:s=>{output+=s}},
+      unsigned_overflow:'warn'
+    });
+    if(output.trim())output.trim().split('\n').forEach(l=>addOut(l,'log'));
+    else addOut('（执行完成，无输出）','info');
+    addOut('退出码：'+(exitCode&&exitCode.v!==undefined?exitCode.v:exitCode),'info');
+  }catch(e){addOut('✗ 本地运行失败：'+(e.message||e),'err');}
+}
+
+function loadPyodideLib(){
+  return new Promise((ok,fail)=>{
+    if(window.loadPyodide){window.loadPyodide().then(ok).catch(fail);return;}
+    const t=document.createElement('script');
+    t.src='https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+    t.onload=()=>window.loadPyodide().then(ok).catch(fail);
+    t.onerror=()=>fail(new Error('脚本加载失败，请检查网络'));
+    document.head.appendChild(t);
+  });
+}
+
+async function installCppPlugin(){
+  addOut('ℹ 下载 C/C++ 本地解释器运行时...','info');
+  const text=await fetchPluginText(JSCPP_URL);
+  localStorage.setItem(JSCPP_STORE_KEY,text);
+  localStorage.setItem('plugin_c_cpp_url',JSCPP_URL);
+  localStorage.removeItem('judge0_url');
+  setInst('c',false);
+  await savePluginToCache(JSCPP_URL,text);
+  await loadScriptText(text,'jscpp-runtime');
+  cppLoaded=true;
+}
+
+async function loadCppPlugin(){
+  if(window.JSCPP&&cppLoaded)return;
+  let text=localStorage.getItem(JSCPP_STORE_KEY);
+  if(!text)text=await readPluginFromCache(JSCPP_URL);
+  if(!text){
+    addOut('ℹ 本地缓存缺失，重新下载 C/C++ 运行时...','info');
+    text=await fetchPluginText(JSCPP_URL);
+    localStorage.setItem(JSCPP_STORE_KEY,text);
+    await savePluginToCache(JSCPP_URL,text);
+  }
+  await loadScriptText(text,'jscpp-runtime');
+  if(!window.JSCPP)throw new Error('运行时加载失败');
+  cppLoaded=true;
+}
+
+async function fetchPluginText(url){
+  const r=await fetch(url,{cache:'no-cache'});
+  if(!r.ok)throw new Error('下载失败 HTTP '+r.status);
+  return await r.text();
+}
+
+async function savePluginToCache(url,text){
+  if(!('caches' in window))return;
+  try{
+    const cache=await caches.open(PLUGIN_CACHE);
+    await cache.put(url,new Response(text,{headers:{'Content-Type':'application/javascript'}}));
+  }catch(e){
+    console.warn('cache save failed',e);
+  }
+}
+
+async function readPluginFromCache(url){
+  if(!('caches' in window))return '';
+  try{
+    const cache=await caches.open(PLUGIN_CACHE);
+    const r=await cache.match(url);
+    return r?await r.text():'';
+  }catch(e){
+    console.warn('cache read failed',e);
+    return '';
+  }
+}
+
+function loadScriptText(text,id){
+  return new Promise((ok,fail)=>{
+    if(window.JSCPP){ok();return;}
+    const old=document.getElementById(id);
+    if(old)old.remove();
+    const s=document.createElement('script');
+    s.id=id;
+    s.text=text+'\n//# sourceURL='+id+'.js';
+    s.onload=ok;
+    s.onerror=()=>fail(new Error('脚本注入失败'));
+    document.head.appendChild(s);
+    setTimeout(()=>window.JSCPP?ok():fail(new Error('运行时未暴露 JSCPP')),0);
+  });
+}
+
+async function removeCppPluginAssets(){
+  localStorage.removeItem(JSCPP_STORE_KEY);
+  localStorage.removeItem('plugin_c_cpp_url');
+  localStorage.removeItem('judge0_url');
+  setInst('c_cpp',false);
+  setInst('c',false);
+  cppLoaded=false;
+  try{delete window.JSCPP}catch{window.JSCPP=undefined}
+  const s=document.getElementById('jscpp-runtime');
+  if(s)s.remove();
+  if('caches' in window){
+    try{
+      const cache=await caches.open(PLUGIN_CACHE);
+      await cache.delete(JSCPP_URL);
+    }catch(e){
+      console.warn('cache delete failed',e);
+    }
+  }
+}
+
+function sv(v){
+  if(v===null)return 'null';if(v===undefined)return 'undefined';
+  if(typeof v==='object'){try{return JSON.stringify(v,null,2)}catch{return String(v)}}
+  return String(v);
+}
+
+function eh(t){
+  const d=document.createElement('div');
+  d.textContent=t||'';
+  return d.innerHTML;
+}
+
+function sendToAI(){
+  saveCurrentFile();
+  const file=currentFile();
+  const code=file?file.content:'';
+  const output=outLines.map(l=>l.text).join('\n');
+  const lang=document.getElementById('lang').value;
+  let msg='请帮我调试文件 '+(file?file.name:'当前文件')+' 中的 '+lang+' 代码：\n\n```'+lang+'\n'+code+'\n```';
+  if(output.trim())msg+='\n\n运行输出：\n```\n'+output+'\n```';
+  localStorage.setItem('pending_debug',msg);
+  location.href='index.html?debug=1';
+}
+
+async function exportCurrentFile(){
+  saveCurrentFile();
+  const file=currentFile();
+  if(!file){await uiAlert('无法导出','当前没有可导出的文件。');return}
+  const blob=new Blob([file.content||''],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=file.name||('code.'+(LANG_EXT[file.lang]||'txt'));
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  await uiAlert('已导出','文件已提交给浏览器下载：'+a.download);
+}
+
+function openPkg(){renderPkgs();document.getElementById('pkgModal').classList.add('on');}
+function closePkg(){document.getElementById('pkgModal').classList.remove('on');}
+
+function renderPkgs(){
+  document.getElementById('pkgList').innerHTML=PLUGINS.map(p=>{
+    const inst=p.id==='c_cpp'?hasCppPlugin():isInst(p.id);
+    let actionBtn='',extra='';
+    if(p.cdn===null){
+      actionBtn=`<button class="pdl" disabled>内置</button>`;
+    }else{
+      actionBtn=inst
+        ?`<button class="pdl del" onclick="removePkg('${p.id}')">删除</button>`
+        :`<button class="pdl inst" id="dlbtn_${p.id}" onclick="installPkg('${p.id}')">下载</button>`;
+    }
+    return `<div class="pi"><div class="dot ${inst?'on':'off'}"></div><div class="pn"><div class="pname">${p.name}</div><div class="pmeta">${p.size} · ${p.note}</div>${extra}</div>${actionBtn}</div>`;
+  }).join('');
+}
+
+async function installPkg(id){
+  const p=PLUGINS.find(x=>x.id===id);if(!p)return;
+  const btn=document.getElementById('dlbtn_'+id);
+  if(btn){btn.className='pdl loading';btn.disabled=true;btn.innerHTML='<span class="spin"></span>下载中';}
+  try{
+    if(id==='python') pyodide=await loadPyodideLib();
+    else if(id==='typescript'){
+      await new Promise((ok,fail)=>{
+        const t=document.createElement('script');
+        t.src='https://cdn.jsdelivr.net/npm/typescript@5.4.5/lib/typescript.js';
+        t.onload=()=>{tsLoaded=true;ok()};t.onerror=fail;document.head.appendChild(t);
+      });
+    }
+    else if(id==='c_cpp') await installCppPlugin();
+    setInst(id,true);addOut('✓ '+p.name+' 安装成功','log');
+  }catch(e){addOut('✗ 安装失败：'+e.message,'err');}
+  renderPkgs();
+}
+
+async function removePkg(id){
+  const p=PLUGINS.find(x=>x.id===id);
+  if(!p||!await uiConfirm('删除插件','确定删除 '+p.name+' 插件？',true))return;
+  setInst(id,false);
+  if(id==='python')pyodide=null;
+  if(id==='typescript')tsLoaded=false;
+  if(id==='c_cpp')await removeCppPluginAssets();
+  addOut('ℹ '+p.name+' 已移除','info');renderPkgs();
+}
+
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runCode();}
+});
+</script>
+</body>
+</html>
