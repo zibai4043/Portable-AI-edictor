@@ -4,20 +4,45 @@ unpackage/
 # HBuilder X 本地配置
 .hbuilderx/
 
+# Gradle
+.gradle/
+build/
+local.properties
+
 # 系统文件
 .DS_Store
 Thumbs.db
 
 # 编辑器
-.vscode/
+*.iml
 .idea/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+.vscode/
 *.suo
 *.user
+
+# 签名文件
+*.jks
+*.keystore
+
+# Google Services
+google-services.json
 
 # 环境变量（API Key 等敏感信息）
 .env
 .env.local
 .env*.local
+
+# 构建产物
+*.aab
+*.apk
+*.hprof
+output-metadata.json
+captures/
+.externalNativeBuild/
+.cxx/
 
 # 日志
 *.log
