@@ -257,7 +257,7 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 <div class="sb" id="sb">
 <div class="sb-h"><div class="sb-t">对话</div><button class="nb" onclick="nc()">+ 新建</button></div>
 <div class="cl" id="cl"></div>
-<div class="sb-f"><button class="st" onclick="os()">设置</button><button class="st" style="margin-top:8px" onclick="openCtxPanel()">上下文管理</button><button class="st" style="margin-top:8px" onclick="openSearch()">搜索对话</button><button class="st" style="margin-top:8px" onclick="openUsage()">用量统计</button><button class="st" style="margin-top:8px" onclick="openExport()">导出对话</button><button class="st" style="margin-top:8px" onclick="location.href='editor.html'">代码编辑器</button></div>
+<div class="sb-f"><button class="st" onclick="os()">设置</button><button class="st" style="margin-top:8px" onclick="openCtxPanel()">上下文管理</button><button class="st" style="margin-top:8px" onclick="openSearch()">搜索对话</button><button class="st" style="margin-top:8px" onclick="openUsage()">用量统计</button><button class="st" style="margin-top:8px" onclick="openExport()">导出对话</button><button class="st" style="margin-top:8px" onclick="importData()">导入备份</button><button class="st" style="margin-top:8px" onclick="location.href='editor.html'">代码编辑器</button></div>
 </div>
 <button class="tg" id="tg" onclick="ts()"><span></span></button>
 <div class="mn">
@@ -269,7 +269,7 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 <div class="md" id="smm"><div class="mbx"><div class="mh"><div class="mt">设置</div><button class="mlc" onclick="cm('smm')">×</button></div><div class="mbd"><div class="fg"><label class="fl">API Endpoint</label><input class="fi" id="ep" placeholder="https://api.example.com"><div class="fh">不需要带 /v1</div></div><div class="fg"><label class="fl">API Key</label><input class="fi" id="ak" placeholder="sk-xxxx"><div class="fh">你的密钥</div></div><div class="fg"><label class="fl">模型名称</label><input class="fi" id="md" placeholder="输入模型名称"><div class="fh">可自定义输入任何模型名称</div></div><div class="fg"><label class="fl">上下文轮数</label><input class="fi" id="ctx" type="number" min="2" max="30" placeholder="8"><div class="fh">只发送最近 N 轮，降低 token 和超上下文风险</div></div><div class="fg"><div class="cap-row"><div><label class="fl" style="margin:0">支持图片输入</label><div class="fh">当前模型可接收 image_url / Vision 内容时开启</div></div><input type="checkbox" id="vision"></div></div><div class="fg"><label class="fl">最大上下文 Token</label><input class="fi" id="maxTokens" type="number" min="1000" max="128000" placeholder="4000"><div class="fh">总预算，长期记忆+摘要+近期对话共享</div></div><div class="fg"><div class="cap-row"><div><label class="fl" style="margin:0">自动压缩摘要</label><div class="fh">每 '+SUMMARY_INTERVAL+' 轮自动生成摘要压缩历史</div></div><input type="checkbox" id="autoCompact"></div></div><div class="fg"><div class="cap-row"><div><label class="fl" style="margin:0">智能记忆提取</label><div class="fh">自动识别用户偏好和关键事实</div></div><input type="checkbox" id="autoMemory"></div></div></div><div class="mmf"><button class="bt bs" onclick="cm('smm')">取消</button><button class="bt bp" onclick="ss()">保存</button></div></div></div>
 <div class="md" id="dm"><div class="mbx"><div class="mh"><div class="mt">删除</div><button class="mlc" onclick="cm('dm')">×</button></div><div class="mbd"><p style="font-size:15px">确定删除？</p></div><div class="mmf"><button class="bt bs" onclick="cm('dm')">取消</button><button class="bt bd" onclick="cd()">删除</button></div></div></div>
 <div class="md" id="im"><div class="mbx"><div class="mh"><div class="mt">提示</div><button class="mlc" onclick="cm('im')">×</button></div><div class="mbd"><p id="imt" style="font-size:15px;line-height:1.7">请检查输入内容</p></div><div class="mmf"><button class="bt bp" onclick="cm('im')">知道了</button></div></div></div>
-<div class="md" id="exm"><div class="mbx"><div class="mh"><div class="mt">导出当前对话</div><button class="mlc" onclick="cm('exm')">×</button></div><div class="mbd"><p style="font-size:14px;line-height:1.7;color:#525252">选择导出格式。Markdown 会保留代码块和图片缩略图。</p></div><div class="mmf"><button class="bt bs" onclick="exportChat('txt')">TXT</button><button class="bt bs" onclick="exportChat('json')">JSON</button><button class="bt bp" onclick="exportChat('md')">Markdown</button></div></div></div>
+<div class="md" id="exm"><div class="mbx"><div class="mh"><div class="mt">导出</div><button class="mlc" onclick="cm('exm')">×</button></div><div class="mbd"><p style="font-size:14px;line-height:1.7;color:#525252;margin-bottom:16px">导出当前对话或全部数据备份。</p><div style="font-size:13px;color:var(--g4);margin-bottom:12px">当前对话：</div><div style="display:flex;gap:8px;margin-bottom:16px"><button class="bt bs" onclick="exportChat('txt')">TXT</button><button class="bt bs" onclick="exportChat('json')">JSON</button><button class="bt bp" onclick="exportChat('md')">Markdown</button></div><div style="font-size:13px;color:var(--g4);margin-bottom:12px">全部备份：</div><button class="bt bp" style="width:100%" onclick="exportAllData();cm('exm')">导出全部对话 + 设置</button></div></div></div>
 <div class="md" id="ctxm"><div class="mbx" style="max-width:520px"><div class="mh"><div class="mt">上下文管理</div><button class="mlc" onclick="cm('ctxm')">×</button></div><div class="mbd" id="ctxContent"></div><div class="mmf"><button class="bt bs" onclick="extractMemoryFromChat()">智能提取记忆</button><button class="bt bs" onclick="regenerateSummaries()">重新生成摘要</button><button class="bt bp" onclick="cm('ctxm')">完成</button></div></div></div>
 <div class="md" id="shm"><div class="mbx" style="max-width:480px"><div class="mh"><div class="mt">搜索对话</div><button class="mlc" onclick="cm('shm')">×</button></div><div class="mbd"><div class="search-box"><input class="search-input" id="shq" placeholder="输入关键词搜索..."><button class="search-btn" onclick="performSearch()">搜索</button></div><div id="shResults" style="max-height:320px;overflow-y:auto"></div></div></div></div>
 <div class="up-mask" id="upMask" onclick="closeUsage()"></div><aside class="up" id="usagePanel"><div class="up-h"><div class="up-t">用量统计</div><button class="mlc" onclick="closeUsage()">×</button></div><div class="up-c" id="usageContent"></div></aside>
@@ -278,7 +278,7 @@ let cf={ep:localStorage.getItem('ep')||'',ak:localStorage.getItem('ak')||'',md:l
 let cs=[],cid=null,sg=false,rt=0,del=null,quoteRef=null,pendingImages=[],aborter=null;
 const REF_MARK='[refrence]',OLD_REF_MARK='[reference]';
 const SUMMARY_INTERVAL=10;
-function init(){lc();rc();if(!cs.length)nc();else lg(cs[0].id);if(!cf.ep||!cf.ak)setTimeout(()=>om('smm'),500);document.getElementById('mn').textContent=cf.md;let dbg=localStorage.getItem('pending_debug');if(dbg){localStorage.removeItem('pending_debug');setTimeout(()=>setHiddenRef('debug',dbg,''),300)}}
+function init(){lc();rc();if(!cs.length)nc();else lg(cs[0].id);if(!cf.ep||!cf.ak)setTimeout(()=>om('smm'),500);document.getElementById('mn').textContent=cf.md;let dbg=localStorage.getItem('pending_debug');if(dbg){localStorage.removeItem('pending_debug');setTimeout(()=>setHiddenRef('debug',dbg,''),300)}setTimeout(showStorageStatus,1000)}
 function closeNativeSplash(){if(window.plus&&plus.navigator)plus.navigator.closeSplashscreen()}
 function lc(){let s=localStorage.getItem('cs');if(s)try{cs=JSON.parse(s)}catch{cs=[]}}
 function sc(){localStorage.setItem('cs',JSON.stringify(cs))}
@@ -597,6 +597,52 @@ function buildApiContent(text,imgs){if(!imgs.length)return text;let arr=[];if(te
 function renderImagePreview(){let el=document.getElementById('imgPrev');el.classList.toggle('on',!!pendingImages.length);el.innerHTML=pendingImages.map((x,i)=>`<div class="img-chip"><img src="${x.data}" alt="${eh(x.name)}"><button class="img-x" onclick="removePendingImage(${i})">×</button></div>`).join('')}
 function removePendingImage(i){pendingImages.splice(i,1);renderImagePreview()}
 function clearPendingImages(){pendingImages=[];renderImagePreview();document.getElementById('imgInput').value=''}
+// ========== 存储监控与备份 ==========
+function checkStorage(){
+  let used=JSON.stringify(cs).length;
+  let mb=(used/1024/1024).toFixed(2);
+  let percent=Math.round(used/(5*1024*1024)*100);
+  return{used,mb,percent}
+}
+function showStorageStatus(){
+  let s=checkStorage();
+  if(s.percent>80)info(`存储空间已达 ${s.percent}%（${s.mb}MB），建议导出备份后清理旧对话`);
+}
+function exportAllData(){
+  let data={
+    conversations:cs,
+    config:{ep:cf.ep,md:cf.md,vision:cf.vision,ctx:cf.ctx,maxTokens:cf.maxTokens,autoCompact:cf.autoCompact,autoMemory:cf.autoMemory},
+    usage:JSON.parse(localStorage.getItem('usage_stats')||'{}'),
+    exported:new Date().toISOString()
+  };
+  downloadText('随身AI_备份_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.json',JSON.stringify(data,null,2),'application/json');
+  info('已导出全部数据');
+}
+function importData(){
+  let input=document.createElement('input');
+  input.type='file';
+  input.accept='.json';
+  input.onchange=async(e)=>{
+    let file=e.target.files[0];
+    if(!file)return;
+    try{
+      let text=await file.text();
+      let data=JSON.parse(text);
+      if(data.conversations){
+        let count=data.conversations.length;
+        if(confirm(`发现 ${count} 个对话，是否导入？\n选择"确定"合并，选择"取消"放弃`)){
+          data.conversations.forEach(c=>{
+            if(!cs.find(x=>x.id===c.id))cs.push(c);
+          });
+          sc();
+          rc();
+          info(`成功导入 ${count} 个对话`);
+        }
+      }else info('无效的备份文件');
+    }catch(e){info('解析失败：'+(e.message||e))}
+  };
+  input.click();
+}
 async function addImageFiles(files){for(const file of [...files].slice(0,4-pendingImages.length)){if(!file.type.startsWith('image/'))continue;try{pendingImages.push(await compressImage(file))}catch(e){info('图片处理失败：'+(e.message||e))}}renderImagePreview()}
 function compressImage(file){return new Promise((ok,fail)=>{let img=new Image(),reader=new FileReader();reader.onload=()=>{img.onload=()=>{let data=drawImageData(img,1280,0.82),thumb=drawImageData(img,360,0.72);ok({name:file.name,type:'image/jpeg',data,thumb})};img.onerror=()=>fail(new Error('无法读取图片'));img.src=reader.result};reader.onerror=()=>fail(new Error('文件读取失败'));reader.readAsDataURL(file)})}
 function drawImageData(img,max,quality){let scale=Math.min(1,max/Math.max(img.width,img.height)),w=Math.round(img.width*scale),h=Math.round(img.height*scale),cv=document.createElement('canvas'),ctx=cv.getContext('2d');cv.width=w;cv.height=h;ctx.drawImage(img,0,0,w,h);return cv.toDataURL('image/jpeg',quality)}
