@@ -254,13 +254,21 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
   .iw{border-radius:18px;padding-left:16px}
   .img-preview{padding:0 2px}
 }
+/* Claude 监控输出样式 */
+.claude-output-system{color:#2563eb}
+.claude-output-user{color:#16a34a}
+.claude-output-assistant{color:#1f2937}
+.claude-output-tool{color:#9333ea}
+.claude-output-error{color:#dc2626}
+.claude-output-text{color:#525252}
+
 </style>
 </head>
 <body>
 <div class="sb" id="sb">
 <div class="sb-h"><div class="sb-t">对话</div><button class="nb" onclick="nc()">+ 新建</button></div>
 <div class="cl" id="cl"></div>
-<div class="sb-f"><button class="st" onclick="os()">设置</button><button class="st" style="margin-top:8px" onclick="openCtxPanel()">上下文管理</button><button class="st" style="margin-top:8px" onclick="openSearch()">搜索对话</button><button class="st" style="margin-top:8px" onclick="openUsage()">用量统计</button><button class="st" style="margin-top:8px" onclick="openExport()">导出对话</button><button class="st" style="margin-top:8px" onclick="importData()">导入备份</button><button class="st" style="margin-top:8px" onclick="location.href='editor.html'">代码编辑器</button></div>
+<div class="sb-f"><button class="st" onclick="os()">设置</button><button class="st" style="margin-top:8px" onclick="openCtxPanel()">上下文管理</button><button class="st" style="margin-top:8px" onclick="openSearch()">搜索对话</button><button class="st" style="margin-top:8px" onclick="openUsage()">用量统计</button><button class="st" style="margin-top:8px" onclick="openExport()">导出对话</button><button class="st" style="margin-top:8px" onclick="importData()">导入备份</button><button class="st" style="margin-top:8px" onclick="openClaudeMonitor()">🖥️ 远程监控</button><button class="st" style="margin-top:8px" onclick="location.href='editor.html'">代码编辑器</button></div>
 </div>
 <button class="tg" id="tg" onclick="ts()"><span></span></button>
 <div class="mn">
@@ -276,6 +284,47 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 <div class="md" id="ctxm"><div class="mbx" style="max-width:520px"><div class="mh"><div class="mt">上下文管理</div><button class="mlc" onclick="cm('ctxm')">×</button></div><div class="mbd" id="ctxContent"></div><div class="mmf"><button class="bt bs" onclick="extractMemoryFromChat()">智能提取记忆</button><button class="bt bs" onclick="regenerateSummaries()">重新生成摘要</button><button class="bt bp" onclick="cm('ctxm')">完成</button></div></div></div>
 <div class="md" id="shm"><div class="mbx" style="max-width:480px"><div class="mh"><div class="mt">搜索对话</div><button class="mlc" onclick="cm('shm')">×</button></div><div class="mbd"><div class="search-box"><input class="search-input" id="shq" placeholder="输入关键词搜索..."><button class="search-btn" onclick="performSearch()">搜索</button></div><div id="shResults" style="max-height:320px;overflow-y:auto"></div></div></div></div>
 <div class="up-mask" id="upMask" onclick="closeUsage()"></div><aside class="up" id="usagePanel"><div class="up-h"><div class="up-t">用量统计</div><button class="mlc" onclick="closeUsage()">×</button></div><div class="up-c" id="usageContent"></div></aside>
+
+<!-- Claude 远程监控面板 -->
+<div class="md" id="claudeMonitor">
+  <div class="mbx" style="max-width:520px;max-height:85vh">
+    <div class="mh"><div class="mt">Claude CLI 远程监控</div><button class="mlc" onclick="cm('claudeMonitor')">×</button></div>
+    <div class="mbd">
+      <div class="fg">
+        <label class="fl">WebSocket URL</label>
+        <input class="fi" id="wsUrl" placeholder="wss://xxx.trycloudflare.com">
+        <div class="fh">从电脑端获取（启动隧道后显示）</div>
+      </div>
+      <div class="fg">
+        <label class="fl">认证 Token</label>
+        <input class="fi" id="wsToken" placeholder="服务器启动时显示的密钥">
+        <div class="fh">电脑端 server.js 启动时生成的 Token</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="bt bp" onclick="connectClaudeWS()" id="wsConnectBtn">连接</button>
+        <button class="bt bs" onclick="disconnectClaudeWS()" id="wsDisconnectBtn" style="display:none">断开</button>
+      </div>
+      <div class="fg">
+        <label class="fl">实时输出</label>
+        <div id="claudeOutput" style="border:1px solid var(--g2);border-radius:8px;padding:12px;min-height:120px;max-height:200px;overflow-y:auto;font-size:13px;font-family:monospace;background:var(--g1);line-height:1.6;white-space:pre-wrap"></div>
+      </div>
+      <div class="fg">
+        <label class="fl">发送指令</label>
+        <div style="display:flex;gap:8px">
+          <input class="fi" id="claudeCmdInput" placeholder="输入消息..." style="flex:1">
+          <button class="bt bp" onclick="sendClaudeCmd()">发送</button>
+        </div>
+        <div class="fh">可发送"继续"、"跳过"等指令控制 CLI</div>
+      </div>
+      <div style="font-size:12px;color:var(--g4);border-top:1px solid var(--g2);padding-top:12px;margin-top:16px">
+        <strong>使用说明：</strong><br>
+        1. 电脑端运行 <code style="background:var(--g1);padding:2px 4px;border-radius:3px">claude-bridge/start.bat</code><br>
+        2. 新终端运行 <code style="background:var(--g1);padding:2px 4px;border-radius:3px">cloudflared tunnel --url ws://localhost:8765</code><br>
+        3. 将生成的 URL 和 Token 填入上方输入框
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 let cf={ep:localStorage.getItem('ep')||'',ak:localStorage.getItem('ak')||'',md:localStorage.getItem('md')||'glm-5.1',vision:localStorage.getItem('vision')==='1',ctx:parseInt(localStorage.getItem('ctx')||'8',10),maxTokens:parseInt(localStorage.getItem('maxTokens')||'4000',10),autoCompact:localStorage.getItem('autoCompact')!=='0',autoMemory:localStorage.getItem('autoMemory')==='1'};
 let cs=[],cid=null,sg=false,rt=0,del=null,quoteRef=null,pendingImages=[],aborter=null,lastAms=null,lastAiIdx=-1;
@@ -681,6 +730,198 @@ document.getElementById('dm').addEventListener('click',e=>{if(e.target.id==='dm'
 document.addEventListener('click',e=>{if(!e.target.closest('#mn'))document.getElementById('modelMenu').style.display='none'});
 window.onload=()=>{init();closeNativeSplash()};
 document.addEventListener('plusready',closeNativeSplash);
+
+// ========== Claude CLI 远程监控 ==========
+let claudeWS=null;
+let claudeWSConnected=false;
+
+function openClaudeMonitor(){
+  let savedUrl=localStorage.getItem('claude_ws_url')||'';
+  let savedToken=localStorage.getItem('claude_ws_token')||'';
+  document.getElementById('wsUrl').value=savedUrl;
+  document.getElementById('wsToken').value=savedToken;
+  om('claudeMonitor');
+}
+
+function connectClaudeWS(){
+  let url=document.getElementById('wsUrl').value.trim();
+  let token=document.getElementById('wsToken').value.trim();
+
+  if(!url||!token){
+    info('请填写 WebSocket URL 和 Token');
+    return;
+  }
+
+  // 保存配置
+  localStorage.setItem('claude_ws_url',url);
+  localStorage.setItem('claude_ws_token',token);
+
+  // 更新 UI
+  document.getElementById('wsConnectBtn').textContent='连接中...';
+  document.getElementById('wsConnectBtn').disabled=true;
+  document.getElementById('claudeOutput').textContent='正在连接...\n';
+
+  // 创建 WebSocket 连接
+  let wsUrl=url.replace(/^https?:/,'wss:').replace(/^http:/,'ws:');
+  if(!wsUrl.startsWith('ws')) wsUrl='wss://'+wsUrl;
+  let fullUrl=wsUrl+(wsUrl.includes('?')?'&':'?')+'token='+encodeURIComponent(token);
+
+  try{
+    claudeWS=new WebSocket(fullUrl);
+
+    claudeWS.onopen=()=>{
+      claudeWSConnected=true;
+      document.getElementById('wsConnectBtn').style.display='none';
+      document.getElementById('wsDisconnectBtn').style.display='block';
+      appendClaudeOutput('✓ 已连接到服务器\n','system');
+    };
+
+    claudeWS.onmessage=(e)=>{
+      try{
+        let msg=JSON.parse(e.data);
+        handleClaudeWSMessage(msg);
+      }catch(err){
+        appendClaudeOutput(e.data+'\n','text');
+      }
+    };
+
+    claudeWS.onclose=(e)=>{
+      claudeWSConnected=false;
+      claudeWS=null;
+      document.getElementById('wsConnectBtn').style.display='block';
+      document.getElementById('wsConnectBtn').textContent='连接';
+      document.getElementById('wsConnectBtn').disabled=false;
+      document.getElementById('wsDisconnectBtn').style.display='none';
+      appendClaudeOutput(`✗ 连接已关闭 (code: ${e.code})\n`,'error');
+    };
+
+    claudeWS.onerror=(err)=>{
+      appendClaudeOutput('✗ 连接错误\n','error');
+      document.getElementById('wsConnectBtn').textContent='连接';
+      document.getElementById('wsConnectBtn').disabled=false;
+    };
+  }catch(err){
+    info('连接失败：'+err.message);
+    document.getElementById('wsConnectBtn').textContent='连接';
+    document.getElementById('wsConnectBtn').disabled=false;
+  }
+}
+
+function disconnectClaudeWS(){
+  if(claudeWS){
+    claudeWS.close();
+    claudeWS=null;
+    claudeWSConnected=false;
+  }
+  document.getElementById('wsConnectBtn').style.display='block';
+  document.getElementById('wsConnectBtn').textContent='连接';
+  document.getElementById('wsConnectBtn').disabled=false;
+  document.getElementById('wsDisconnectBtn').style.display='none';
+}
+
+function handleClaudeWSMessage(msg){
+  let output=document.getElementById('claudeOutput');
+
+  switch(msg.type){
+    case 'system':
+      if(msg.subtype==='connected'){
+        appendClaudeOutput('✓ 会话已建立\n','system');
+        if(msg.token) localStorage.setItem('claude_ws_token',msg.token);
+      }else if(msg.subtype==='claude_exit'){
+        appendClaudeOutput(`✗ Claude 进程已退出 (code: ${msg.code})\n`,'error');
+      }else{
+        appendClaudeOutput(`[系统] ${msg.message||JSON.stringify(msg)}\n`,'system');
+      }
+      break;
+
+    case 'claude_event':
+      handleClaudeEvent(msg.data);
+      break;
+
+    case 'user':
+      appendClaudeOutput(`[用户] ${msg.content}\n`,'user');
+      break;
+
+    case 'text':
+      appendClaudeOutput(msg.content+'\n','text');
+      break;
+
+    case 'error':
+      appendClaudeOutput(`[错误] ${msg.content}\n`,'error');
+      break;
+
+    default:
+      appendClaudeOutput(JSON.stringify(msg,null,2)+'\n','text');
+  }
+}
+
+function handleClaudeEvent(data){
+  if(!data)return;
+
+  switch(data.type){
+    case 'assistant':
+      if(data.message?.content){
+        data.message.content.forEach(block=>{
+          if(block.type==='text'){
+            appendClaudeOutput(block.text,'assistant');
+          }else if(block.type==='tool_use'){
+            appendClaudeOutput(`[工具调用] ${block.name}\n`,'tool');
+          }
+        });
+      }
+      break;
+
+    case 'result':
+      if(data.subtype==='success'){
+        appendClaudeOutput(`✓ 任务完成\n`,'system');
+      }else if(data.subtype?.startsWith('error')){
+        appendClaudeOutput(`✗ 任务失败: ${data.error||'未知错误'}\n`,'error');
+      }
+      break;
+
+    default:
+      appendClaudeOutput(JSON.stringify(data)+'\n','text');
+  }
+}
+
+function appendClaudeOutput(text,type){
+  let output=document.getElementById('claudeOutput');
+  let span=document.createElement('span');
+  span.textContent=text;
+  span.className='claude-output-'+type;
+  output.appendChild(span);
+  output.scrollTop=output.scrollHeight;
+}
+
+function sendClaudeCmd(){
+  if(!claudeWSConnected||!claudeWS){
+    info('未连接到服务器');
+    return;
+  }
+
+  let input=document.getElementById('claudeCmdInput');
+  let content=input.value.trim();
+  if(!content)return;
+
+  let msg={type:'user_input',content:content};
+  claudeWS.send(JSON.stringify(msg));
+  input.value='';
+  appendClaudeOutput(`[发送] ${content}\n`,'user');
+}
+
+// 回车发送
+document.addEventListener('DOMContentLoaded',()=>{
+  let cmdInput=document.getElementById('claudeCmdInput');
+  if(cmdInput){
+    cmdInput.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'&&!e.shiftKey){
+        e.preventDefault();
+        sendClaudeCmd();
+      }
+    });
+  }
+});
+
 </script>
 </body>
 </html>
