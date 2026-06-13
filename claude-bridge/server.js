@@ -3,6 +3,12 @@
  *
  * 用于远程监控和控制 Claude Code CLI
  *
+ * 安全注意事项：
+ * - Token 应妥善保管，不要分享给他人
+ * - 建议使用 cloudflared tunnel 而不是直接暴露端口
+ * - 不要在公共网络上使用，或使用 WSS (TLS) 加密
+ * - Token 每次启动自动生成，重启后需要更新客户端配置
+ *
  * 使用方式：
  * 1. npm install
  * 2. node server.js
@@ -13,14 +19,17 @@
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
-const readline = require('readline');
 
 // 配置
 const CONFIG = {
   port: process.env.PORT || 8765,
   authToken: process.env.AUTH_TOKEN || generateToken(),
   claudePath: 'claude',
-  workDir: process.cwd()
+  workDir: process.cwd(),
+  maxClients: 5,
+  maxMessageLength: 100000, // 100KB
+  maxBufferSize: 1024 * 1024, // 1MB
+  authTimeout: 5000 // 5秒认证超时
 };
 
 // 生成安全 token
@@ -44,17 +53,16 @@ const clients = new Set();
 let claudeProcess = null;
 let claudeBuffer = '';
 
-// 启动 Claude CLI
+// 启动 Claude CLI（不使用 shell 模式，避免命令注入）
 function startClaude() {
   log.info('Starting Claude CLI...');
 
-  // 使用 --print 模式，输出到 stdout
+  // 不使用 shell: true，直接执行命令
   claudeProcess = spawn(CONFIG.claudePath, [
     '--print',
     '--output-format', 'stream-json'
   ], {
     cwd: CONFIG.workDir,
-    shell: true,
     stdio: ['pipe', 'pipe', 'pipe']
   });
 
@@ -85,8 +93,14 @@ function startClaude() {
   });
 }
 
-// 处理 Claude 输出缓冲
+// 处理 Claude 输出缓冲（添加大小限制）
 function processClaudeBuffer() {
+  // 安全检查：防止缓冲区无限增长
+  if (claudeBuffer.length > CONFIG.maxBufferSize) {
+    log.error('Buffer overflow, truncating');
+    claudeBuffer = claudeBuffer.slice(-CONFIG.maxBufferSize / 2);
+  }
+
   const lines = claudeBuffer.split('\n');
   claudeBuffer = lines.pop() || '';
 
@@ -124,8 +138,24 @@ function broadcast(message) {
   });
 }
 
-// 发送消息给 Claude
+// 发送消息给 Claude（添加输入验证）
 function sendToClaude(content) {
+  // 验证输入
+  if (!content) return false;
+
+  // 长度限制
+  if (content.length > CONFIG.maxMessageLength) {
+    log.error(`Message too long: ${content.length} bytes`);
+    broadcast({ type: 'error', content: '消息过长，已拒绝' });
+    return false;
+  }
+
+  // 检查危险字符
+  if (content.includes('\x00') || content.includes('\x04')) {
+    log.error('Message contains control characters');
+    return false;
+  }
+
   if (claudeProcess && claudeProcess.stdin.writable) {
     claudeProcess.stdin.write(content + '\n');
     log.info(`Sent to Claude: ${content.substring(0, 50)}...`);
@@ -134,38 +164,74 @@ function sendToClaude(content) {
   return false;
 }
 
-// WebSocket 连接处理
+// WebSocket 连接处理（使用消息认证，不使用 URL 参数）
 wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, `http://localhost:${CONFIG.port}`);
-  const token = url.searchParams.get('token');
+  let authenticated = false;
+  const ip = req.socket.remoteAddress;
 
-  // 验证 token
-  if (token !== CONFIG.authToken) {
-    log.error(`Invalid token from ${req.socket.remoteAddress}`);
-    ws.close(1008, 'Invalid token');
-    return;
-  }
+  log.info(`New connection from ${ip}`);
 
-  log.info(`Client connected from ${req.socket.remoteAddress}`);
-  clients.add(ws);
+  // 设置认证超时
+  const authTimeout = setTimeout(() => {
+    if (!authenticated) {
+      log.error(`Authentication timeout from ${ip}`);
+      ws.close(1008, 'Authentication timeout');
+    }
+  }, CONFIG.authTimeout);
 
-  // 发送欢迎消息
-  ws.send(JSON.stringify({
-    type: 'system',
-    subtype: 'connected',
-    message: 'Connected to Claude Bridge Server',
-    token: CONFIG.authToken
-  }));
-
-  // 如果 Claude 还没启动，启动它
-  if (!claudeProcess) {
-    startClaude();
-  }
-
-  // 接收客户端消息
+  // 连接数限制（在认证后检查）
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data.toString());
+
+      // 第一条消息必须是认证
+      if (!authenticated) {
+        if (message.type === 'auth' && message.token === CONFIG.authToken) {
+          authenticated = true;
+          clearTimeout(authTimeout);
+
+          // 检查连接数限制
+          if (clients.size >= CONFIG.maxClients) {
+            log.error(`Max clients reached (${CONFIG.maxClients}), rejecting`);
+            ws.send(JSON.stringify({
+              type: 'error',
+              content: '服务器繁忙，已达最大连接数'
+            }));
+            ws.close(1013, 'Server busy');
+            return;
+          }
+
+          clients.add(ws);
+
+          // 初始化心跳
+          ws.isAlive = true;
+          ws.on('pong', () => {
+            ws.isAlive = true;
+          });
+
+          // 发送欢迎消息（不包含 token）
+          ws.send(JSON.stringify({
+            type: 'system',
+            subtype: 'connected',
+            message: '认证成功，已连接到 Claude Bridge Server'
+          }));
+
+          log.info(`Client authenticated from ${ip}`);
+
+          // 如果 Claude 还没启动，启动它
+          if (!claudeProcess) {
+            startClaude();
+          }
+          return;
+        }
+
+        // 认证失败
+        log.error(`Invalid authentication from ${ip}`);
+        ws.close(1008, 'Invalid authentication');
+        return;
+      }
+
+      // 处理已认证客户端的消息
       handleClientMessage(ws, message);
     } catch (err) {
       log.error(`Invalid message: ${err.message}`);
@@ -174,7 +240,7 @@ wss.on('connection', (ws, req) => {
 
   // 断开连接
   ws.on('close', () => {
-    log.info('Client disconnected');
+    log.info(`Client disconnected from ${ip}`);
     clients.delete(ws);
   });
 
@@ -193,8 +259,9 @@ function handleClientMessage(ws, message) {
     case 'user_input':
       // 发送用户输入给 Claude
       if (message.content) {
-        sendToClaude(message.content);
-        broadcast({ type: 'user', content: message.content });
+        if (sendToClaude(message.content)) {
+          broadcast({ type: 'user', content: message.content });
+        }
       }
       break;
 
@@ -245,10 +312,11 @@ function handleCommand(ws, command, args) {
   }
 }
 
-// 心跳检测
+// 心跳检测（正确处理 pong）
 setInterval(() => {
   wss.clients.forEach(ws => {
     if (ws.isAlive === false) {
+      log.info('Terminating dead connection');
       return ws.terminate();
     }
     ws.isAlive = false;
@@ -264,10 +332,17 @@ wss.on('listening', () => {
 ╠════════════════════════════════════════════════════════════╣
 ║  WebSocket URL:  ws://localhost:${CONFIG.port}                 ║
 ║  Auth Token:     ${CONFIG.authToken}              ║
+║  Max Clients:    ${CONFIG.maxClients}                                   ║
+╠════════════════════════════════════════════════════════════╣
+║  安全提示:                                                 ║
+║  - Token 不通过 URL 传递，更安全                           ║
+║  - 连接后需先发送认证消息                                  ║
+║  - 建议使用 cloudflared tunnel                             ║
 ╠════════════════════════════════════════════════════════════╣
 ║  使用方式:                                                 ║
-║  1. 在手机 APP 中连接此服务器                              ║
-║  2. 启动隧道: cloudflared tunnel --url ws://localhost:8765 ║
+║  1. 在手机 APP 中输入 URL 和 Token                         ║
+║  2. 点击连接，系统会自动认证                               ║
+║  3. 启动隧道: cloudflared tunnel --url ws://localhost:8765 ║
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

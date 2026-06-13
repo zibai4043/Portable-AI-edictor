@@ -305,7 +305,7 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
         <button class="bt bs" onclick="disconnectClaudeWS()" id="wsDisconnectBtn" style="display:none">断开</button>
       </div>
       <div class="fg">
-        <label class="fl">实时输出</label>
+        <label class="fl">实时输出 <button class="bt bs" style="font-size:11px;padding:3px 8px;margin-left:8px" onclick="clearClaudeOutput()">清空</button></label>
         <div id="claudeOutput" style="border:1px solid var(--g2);border-radius:8px;padding:12px;min-height:120px;max-height:200px;overflow-y:auto;font-size:13px;font-family:monospace;background:var(--g1);line-height:1.6;white-space:pre-wrap"></div>
       </div>
       <div class="fg">
@@ -734,6 +734,9 @@ document.addEventListener('plusready',closeNativeSplash);
 // ========== Claude CLI 远程监控 ==========
 let claudeWS=null;
 let claudeWSConnected=false;
+let reconnectAttempts=0;
+const MAX_RECONNECT_ATTEMPTS=3;
+const RECONNECT_DELAY=3000;
 
 function openClaudeMonitor(){
   let savedUrl=localStorage.getItem('claude_ws_url')||'';
@@ -752,28 +755,28 @@ function connectClaudeWS(){
     return;
   }
 
-  // 保存配置
+  // 只保存 URL，不保存 Token（更安全）
   localStorage.setItem('claude_ws_url',url);
-  localStorage.setItem('claude_ws_token',token);
 
   // 更新 UI
   document.getElementById('wsConnectBtn').textContent='连接中...';
   document.getElementById('wsConnectBtn').disabled=true;
   document.getElementById('claudeOutput').textContent='正在连接...\n';
 
-  // 创建 WebSocket 连接
+  // 创建 WebSocket 连接（不在 URL 中传递 token）
   let wsUrl=url.replace(/^https?:/,'wss:').replace(/^http:/,'ws:');
   if(!wsUrl.startsWith('ws')) wsUrl='wss://'+wsUrl;
-  let fullUrl=wsUrl+(wsUrl.includes('?')?'&':'?')+'token='+encodeURIComponent(token);
 
   try{
-    claudeWS=new WebSocket(fullUrl);
+    claudeWS=new WebSocket(wsUrl);
 
     claudeWS.onopen=()=>{
-      claudeWSConnected=true;
-      document.getElementById('wsConnectBtn').style.display='none';
-      document.getElementById('wsDisconnectBtn').style.display='block';
-      appendClaudeOutput('✓ 已连接到服务器\n','system');
+      // 连接成功后发送认证消息
+      claudeWS.send(JSON.stringify({
+        type:'auth',
+        token:token
+      }));
+      appendClaudeOutput('已连接，正在认证...\n','system');
     };
 
     claudeWS.onmessage=(e)=>{
@@ -788,15 +791,32 @@ function connectClaudeWS(){
     claudeWS.onclose=(e)=>{
       claudeWSConnected=false;
       claudeWS=null;
-      document.getElementById('wsConnectBtn').style.display='block';
-      document.getElementById('wsConnectBtn').textContent='连接';
-      document.getElementById('wsConnectBtn').disabled=false;
-      document.getElementById('wsDisconnectBtn').style.display='none';
-      appendClaudeOutput(`✗ 连接已关闭 (code: ${e.code})\n`,'error');
+
+      // 非正常关闭时尝试重连
+      if(e.code!==1000&&reconnectAttempts<MAX_RECONNECT_ATTEMPTS){
+        reconnectAttempts++;
+        appendClaudeOutput(`正在重连 (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...\n`,'system');
+        setTimeout(connectClaudeWS,RECONNECT_DELAY);
+      }else{
+        document.getElementById('wsConnectBtn').style.display='block';
+        document.getElementById('wsConnectBtn').textContent='连接';
+        document.getElementById('wsConnectBtn').disabled=false;
+        document.getElementById('wsDisconnectBtn').style.display='none';
+        appendClaudeOutput(`✗ 连接已关闭 (code: ${e.code})\n`,'error');
+        reconnectAttempts=0;
+      }
     };
 
     claudeWS.onerror=(err)=>{
-      appendClaudeOutput('✗ 连接错误\n','error');
+      let errorMsg='连接错误';
+      if(claudeWS.readyState===WebSocket.CONNECTING){
+        errorMsg='连接失败，请检查 URL 是否正确';
+      }else if(claudeWS.readyState===WebSocket.CLOSING){
+        errorMsg='连接正在关闭';
+      }else if(claudeWS.readyState===WebSocket.CLOSED){
+        errorMsg='连接已断开';
+      }
+      appendClaudeOutput(`✗ ${errorMsg}\n`,'error');
       document.getElementById('wsConnectBtn').textContent='连接';
       document.getElementById('wsConnectBtn').disabled=false;
     };
@@ -808,8 +828,9 @@ function connectClaudeWS(){
 }
 
 function disconnectClaudeWS(){
+  reconnectAttempts=MAX_RECONNECT_ATTEMPTS; // 阻止自动重连
   if(claudeWS){
-    claudeWS.close();
+    claudeWS.close(1000); // 正常关闭
     claudeWS=null;
     claudeWSConnected=false;
   }
@@ -817,16 +838,18 @@ function disconnectClaudeWS(){
   document.getElementById('wsConnectBtn').textContent='连接';
   document.getElementById('wsConnectBtn').disabled=false;
   document.getElementById('wsDisconnectBtn').style.display='none';
+  reconnectAttempts=0;
 }
 
 function handleClaudeWSMessage(msg){
-  let output=document.getElementById('claudeOutput');
-
   switch(msg.type){
     case 'system':
       if(msg.subtype==='connected'){
-        appendClaudeOutput('✓ 会话已建立\n','system');
-        if(msg.token) localStorage.setItem('claude_ws_token',msg.token);
+        claudeWSConnected=true;
+        reconnectAttempts=0; // 重置重连计数
+        document.getElementById('wsConnectBtn').style.display='none';
+        document.getElementById('wsDisconnectBtn').style.display='block';
+        appendClaudeOutput('✓ 认证成功，会话已建立\n','system');
       }else if(msg.subtype==='claude_exit'){
         appendClaudeOutput(`✗ Claude 进程已退出 (code: ${msg.code})\n`,'error');
       }else{
@@ -886,11 +909,21 @@ function handleClaudeEvent(data){
 
 function appendClaudeOutput(text,type){
   let output=document.getElementById('claudeOutput');
+
+  // 限制最大行数，防止 DOM 过大
+  while(output.children.length>100){
+    output.removeChild(output.firstChild);
+  }
+
   let span=document.createElement('span');
   span.textContent=text;
   span.className='claude-output-'+type;
   output.appendChild(span);
   output.scrollTop=output.scrollHeight;
+}
+
+function clearClaudeOutput(){
+  document.getElementById('claudeOutput').innerHTML='';
 }
 
 function sendClaudeCmd(){
@@ -909,8 +942,8 @@ function sendClaudeCmd(){
   appendClaudeOutput(`[发送] ${content}\n`,'user');
 }
 
-// 回车发送
-document.addEventListener('DOMContentLoaded',()=>{
+// 回车发送（延迟绑定，确保 DOM 加载完成）
+setTimeout(()=>{
   let cmdInput=document.getElementById('claudeCmdInput');
   if(cmdInput){
     cmdInput.addEventListener('keydown',(e)=>{
@@ -920,7 +953,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       }
     });
   }
-});
+},100);
 
 </script>
 </body>
