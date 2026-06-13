@@ -206,7 +206,6 @@ body{font-family:-apple-system,sans-serif;background:var(--w);display:flex;flex-
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 <script>
 let editor, outLines=[], pyodide=null, tsLoaded=false, cppLoaded=false;
 let files=[], currentFileId=null, suppressEditorChange=false;
@@ -226,8 +225,30 @@ const isInst=id=>isBuiltin(id)||!!localStorage.getItem('plugin_'+id);
 const setInst=(id,v)=>v?localStorage.setItem('plugin_'+id,'1'):localStorage.removeItem('plugin_'+id);
 const hasCppPlugin=()=>isInst('c_cpp')||isInst('c');
 const PLUGIN_CACHE='portable_ai_plugin_cache_v1';
-const JSCPP_URL='https://cdn.jsdelivr.net/gh/felixhao28/JSCPP@gh-pages/dist/JSCPP.es5.min.js';
+const JSCPP_LOCAL_URL='js/plugins/jscpp-runtime.js';
+const JSCPP_URLS=[
+  JSCPP_LOCAL_URL,
+  'https://cdn.jsdelivr.net/gh/felixhao28/JSCPP@gh-pages/dist/JSCPP.es5.min.js',
+  'https://fastly.jsdelivr.net/gh/felixhao28/JSCPP@gh-pages/dist/JSCPP.es5.min.js'
+];
 const JSCPP_STORE_KEY='plugin_asset_c_cpp_jscpp';
+const MONACO_VS_PATHS=[
+  'https://registry.npmmirror.com/monaco-editor/0.45.0/files/min/vs',
+  'https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs',
+  'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'
+];
+const MONACO_LOADER_URLS=MONACO_VS_PATHS.map(x=>x+'/loader.js');
+const TS_URLS=[
+  'https://registry.npmmirror.com/typescript/5.4.5/files/lib/typescript.js',
+  'https://cdn.bootcdn.net/ajax/libs/typescript/5.4.5/typescript.min.js',
+  'https://cdn.jsdelivr.net/npm/typescript@5.4.5/lib/typescript.js'
+];
+const PYODIDE_INDEX_URLS=[
+  'https://registry.npmmirror.com/pyodide/0.25.0/files/',
+  'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/',
+  'https://unpkg.com/pyodide@0.25.0/'
+];
+const PYODIDE_LOADER_URLS=PYODIDE_INDEX_URLS.map(x=>x+'pyodide.js');
 const LANG_EXT={javascript:'js',python:'py',typescript:'ts',c:'c',cpp:'cpp',html:'html',css:'css',json:'json'};
 const EXT_LANG={js:'javascript',mjs:'javascript',py:'python',ts:'typescript',c:'c',h:'c',cpp:'cpp',cc:'cpp',cxx:'cpp',hpp:'cpp',html:'html',css:'css',json:'json'};
 
@@ -258,7 +279,38 @@ function uiPrompt(title,message,value){return openUiModal({title,message,value,i
 function uiConfirm(title,message,danger){return openUiModal({title,message,danger:!!danger,okText:danger?'删除':'确定'});}
 function uiAlert(title,message){return openUiModal({title,message,alert:true,okText:'知道了'});}
 
-require.config({paths:{vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+function hostOf(url){
+  try{return new URL(url,location.href).host||url}catch{return url}
+}
+
+function loadExternalScript(url,id){
+  return new Promise((ok,fail)=>{
+    if(id){
+      const old=document.getElementById(id);
+      if(old)old.remove();
+    }
+    const s=document.createElement('script');
+    if(id)s.id=id;
+    s.src=url;
+    s.onload=()=>ok(url);
+    s.onerror=()=>fail(new Error('脚本加载失败：'+hostOf(url)));
+    document.head.appendChild(s);
+  });
+}
+
+async function loadScriptFromUrls(urls,id,ready){
+  let lastErr=null;
+  for(const url of urls){
+    try{
+      await loadExternalScript(url,id);
+      if(!ready||ready())return url;
+      lastErr=new Error('脚本未就绪：'+hostOf(url));
+    }catch(e){lastErr=e}
+  }
+  throw lastErr||new Error('脚本加载失败');
+}
+
+loadMonaco().then(()=>{
 require(['vs/editor/editor.main'],function(){
   initFiles();
   const file=currentFile();
@@ -277,6 +329,24 @@ require(['vs/editor/editor.main'],function(){
   receivePendingEditorCode();
   renderFiles();
 });
+}).catch(e=>{
+  document.getElementById('editor').innerHTML='<div style="padding:16px;color:#c00;font-size:14px">编辑器加载失败：'+eh(e.message||e)+'</div>';
+});
+
+async function loadMonaco(){
+  if(window.monaco&&window.require)return;
+  let lastErr=null;
+  for(let i=0;i<MONACO_LOADER_URLS.length;i++){
+    try{
+      await loadExternalScript(MONACO_LOADER_URLS[i],'monaco-loader');
+      const vs=MONACO_VS_PATHS[i];
+      window.require.config({paths:{vs}});
+      addOut('✓ 编辑器运行时已加载：'+hostOf(vs),'info');
+      return;
+    }catch(e){lastErr=e}
+  }
+  throw lastErr||new Error('Monaco 加载失败');
+}
 
 function setLang(){
   const lang=document.getElementById('lang').value;
@@ -582,13 +652,8 @@ async function runTS(){
   if(!isInst('typescript')){addOut('⚠ TypeScript 插件未安装','warn');addOut('点"插件"→ 下载 TypeScript（~5MB）','info');return;}
   if(!tsLoaded){
     addOut('ℹ 加载 TypeScript 编译器...','info');
-    try{
-      await new Promise((ok,fail)=>{
-        const t=document.createElement('script');
-        t.src='https://cdn.jsdelivr.net/npm/typescript@5.4.5/lib/typescript.js';
-        t.onload=()=>{tsLoaded=true;ok()};t.onerror=fail;document.head.appendChild(t);
-      });
-    }catch(e){addOut('✗ 加载失败：'+e.message,'err');return;}
+    try{await loadTypeScriptRuntime();}
+    catch(e){addOut('✗ 加载失败：'+e.message,'err');return;}
   }
   try{
     const js=window.ts.transpileModule(source,{compilerOptions:{module:0}}).outputText;
@@ -625,24 +690,43 @@ async function runCppLocal(langName){
 }
 
 function loadPyodideLib(){
-  return new Promise((ok,fail)=>{
-    if(window.loadPyodide){window.loadPyodide().then(ok).catch(fail);return;}
-    const t=document.createElement('script');
-    t.src='https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-    t.onload=()=>window.loadPyodide().then(ok).catch(fail);
-    t.onerror=()=>fail(new Error('脚本加载失败，请检查网络'));
-    document.head.appendChild(t);
+  return new Promise(async (ok,fail)=>{
+    try{
+      if(!window.loadPyodide){
+        const loader=await loadScriptFromUrls(PYODIDE_LOADER_URLS,'pyodide-loader',()=>!!window.loadPyodide);
+        localStorage.setItem('plugin_pyodide_loader',loader);
+      }
+      for(const indexURL of PYODIDE_INDEX_URLS){
+        try{
+          const runtime=await window.loadPyodide({indexURL});
+          localStorage.setItem('plugin_pyodide_index',indexURL);
+          addOut('✓ Python 运行时已加载：'+hostOf(indexURL),'info');
+          ok(runtime);
+          return;
+        }catch(e){}
+      }
+      fail(new Error('Pyodide 资源加载失败，请检查网络或稍后重试'));
+    }catch(e){fail(e)}
   });
+}
+
+async function loadTypeScriptRuntime(){
+  if(window.ts){tsLoaded=true;return;}
+  const used=await loadScriptFromUrls(TS_URLS,'typescript-runtime',()=>!!window.ts);
+  tsLoaded=true;
+  localStorage.setItem('plugin_typescript_url',used);
+  addOut('✓ TypeScript 编译器已加载：'+hostOf(used),'info');
 }
 
 async function installCppPlugin(){
   addOut('ℹ 下载 C/C++ 本地解释器运行时...','info');
-  const text=await fetchPluginText(JSCPP_URL);
+  const found=await fetchPluginTextFromUrls(JSCPP_URLS);
+  const text=found.text;
   localStorage.setItem(JSCPP_STORE_KEY,text);
-  localStorage.setItem('plugin_c_cpp_url',JSCPP_URL);
+  localStorage.setItem('plugin_c_cpp_url',found.url);
   localStorage.removeItem('judge0_url');
   setInst('c',false);
-  await savePluginToCache(JSCPP_URL,text);
+  await savePluginToCache(found.url,text);
   await loadScriptText(text,'jscpp-runtime');
   cppLoaded=true;
 }
@@ -650,12 +734,14 @@ async function installCppPlugin(){
 async function loadCppPlugin(){
   if(window.JSCPP&&cppLoaded)return;
   let text=localStorage.getItem(JSCPP_STORE_KEY);
-  if(!text)text=await readPluginFromCache(JSCPP_URL);
+  if(!text)text=await readPluginFromCacheUrls(cppCacheUrls());
   if(!text){
     addOut('ℹ 本地缓存缺失，重新下载 C/C++ 运行时...','info');
-    text=await fetchPluginText(JSCPP_URL);
+    const found=await fetchPluginTextFromUrls(JSCPP_URLS);
+    text=found.text;
     localStorage.setItem(JSCPP_STORE_KEY,text);
-    await savePluginToCache(JSCPP_URL,text);
+    localStorage.setItem('plugin_c_cpp_url',found.url);
+    await savePluginToCache(found.url,text);
   }
   await loadScriptText(text,'jscpp-runtime');
   if(!window.JSCPP)throw new Error('运行时加载失败');
@@ -666,6 +752,18 @@ async function fetchPluginText(url){
   const r=await fetch(url,{cache:'no-cache'});
   if(!r.ok)throw new Error('下载失败 HTTP '+r.status);
   return await r.text();
+}
+
+async function fetchPluginTextFromUrls(urls){
+  let lastErr=null;
+  for(const url of urls){
+    try{
+      const text=await fetchPluginText(url);
+      addOut('✓ 运行时来源：'+hostOf(url),'info');
+      return {url,text};
+    }catch(e){lastErr=e}
+  }
+  throw lastErr||new Error('所有下载源都不可用');
 }
 
 async function savePluginToCache(url,text){
@@ -688,6 +786,19 @@ async function readPluginFromCache(url){
     console.warn('cache read failed',e);
     return '';
   }
+}
+
+function cppCacheUrls(){
+  const last=localStorage.getItem('plugin_c_cpp_url');
+  return [...new Set([last,...JSCPP_URLS].filter(Boolean))];
+}
+
+async function readPluginFromCacheUrls(urls){
+  for(const url of urls){
+    const text=await readPluginFromCache(url);
+    if(text)return text;
+  }
+  return '';
 }
 
 function loadScriptText(text,id){
@@ -718,7 +829,7 @@ async function removeCppPluginAssets(){
   if('caches' in window){
     try{
       const cache=await caches.open(PLUGIN_CACHE);
-      await cache.delete(JSCPP_URL);
+      for(const url of cppCacheUrls())await cache.delete(url);
     }catch(e){
       console.warn('cache delete failed',e);
     }
@@ -789,13 +900,7 @@ async function installPkg(id){
   if(btn){btn.className='pdl loading';btn.disabled=true;btn.innerHTML='<span class="spin"></span>下载中';}
   try{
     if(id==='python') pyodide=await loadPyodideLib();
-    else if(id==='typescript'){
-      await new Promise((ok,fail)=>{
-        const t=document.createElement('script');
-        t.src='https://cdn.jsdelivr.net/npm/typescript@5.4.5/lib/typescript.js';
-        t.onload=()=>{tsLoaded=true;ok()};t.onerror=fail;document.head.appendChild(t);
-      });
-    }
+    else if(id==='typescript') await loadTypeScriptRuntime();
     else if(id==='c_cpp') await installCppPlugin();
     setInst(id,true);addOut('✓ '+p.name+' 安装成功','log');
   }catch(e){addOut('✗ 安装失败：'+e.message,'err');}
