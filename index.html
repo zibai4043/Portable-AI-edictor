@@ -246,6 +246,9 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 .mem-auto-btn{font-size:12px;padding:4px 10px;border:1px solid var(--g2);background:var(--w);border-radius:6px;cursor:pointer;margin-left:8px}
 .mem-auto-btn:hover{border-color:var(--b)}
 .mem-badge{font-size:10px;padding:2px 6px;background:#22c55e;color:var(--w);border-radius:4px;margin-left:6px}
+.model-item{padding:10px 14px;cursor:pointer;font-size:13px;transition:background 0.2s}
+.model-item:hover{background:var(--g1)}
+.model-item.on{background:var(--g1);font-weight:600}
 @media(max-width:768px){
   .ia{padding:18px 14px 24px}
   .iw{border-radius:18px;padding-left:16px}
@@ -261,7 +264,7 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 </div>
 <button class="tg" id="tg" onclick="ts()"><span></span></button>
 <div class="mn">
-<div class="hd"><div class="tt" id="tt">新对话</div><div class="mb" id="mn" onclick="os()">GLM-5.1 ▾</div></div>
+<div class="hd"><div class="tt" id="tt">新对话</div><div class="mb" id="mn" onclick="toggleModelMenu()"><span id="mnTxt">GLM-5.1</span> ▾<div id="modelMenu" style="display:none;position:absolute;top:100%;right:0;background:var(--w);border:1px solid var(--g2);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:160px;z-index:10"></div></div></div>
 <div class="ch" id="ch"><div class="em"><div class="ei">○</div><div class="et">开始对话</div></div></div>
 <div class="tp" id="tp"><div class="av">○</div><div class="ttt">正在输入...</div></div>
 <div class="ia"><div class="img-preview" id="imgPrev"></div><div class="iw"><button class="attach-btn" onclick="document.getElementById('imgInput').click()">＋</button><button class="attach-btn camera-btn" onclick="takePhoto()">拍</button><textarea id="ip" placeholder="输入消息..." rows="1"></textarea><input id="imgInput" type="file" accept="image/*" multiple style="display:none"><button class="sd" id="btn" onclick="sm()">→</button></div></div>
@@ -275,10 +278,23 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 <div class="up-mask" id="upMask" onclick="closeUsage()"></div><aside class="up" id="usagePanel"><div class="up-h"><div class="up-t">用量统计</div><button class="mlc" onclick="closeUsage()">×</button></div><div class="up-c" id="usageContent"></div></aside>
 <script>
 let cf={ep:localStorage.getItem('ep')||'',ak:localStorage.getItem('ak')||'',md:localStorage.getItem('md')||'glm-5.1',vision:localStorage.getItem('vision')==='1',ctx:parseInt(localStorage.getItem('ctx')||'8',10),maxTokens:parseInt(localStorage.getItem('maxTokens')||'4000',10),autoCompact:localStorage.getItem('autoCompact')!=='0',autoMemory:localStorage.getItem('autoMemory')==='1'};
-let cs=[],cid=null,sg=false,rt=0,del=null,quoteRef=null,pendingImages=[],aborter=null;
+let cs=[],cid=null,sg=false,rt=0,del=null,quoteRef=null,pendingImages=[],aborter=null,lastAms=null,lastAiIdx=-1;
 const REF_MARK='[refrence]',OLD_REF_MARK='[reference]';
 const SUMMARY_INTERVAL=10;
-function init(){lc();rc();if(!cs.length)nc();else lg(cs[0].id);if(!cf.ep||!cf.ak)setTimeout(()=>om('smm'),500);document.getElementById('mn').textContent=cf.md;let dbg=localStorage.getItem('pending_debug');if(dbg){localStorage.removeItem('pending_debug');setTimeout(()=>setHiddenRef('debug',dbg,''),300)}setTimeout(showStorageStatus,1000)}
+const PRESET_MODELS=[
+  {id:'glm-5.1',name:'GLM-5.1',vision:true},
+  {id:'glm-4-plus',name:'GLM-4-Plus',vision:true},
+  {id:'gpt-4o',name:'GPT-4o',vision:true},
+  {id:'gpt-4o-mini',name:'GPT-4o-mini',vision:true},
+  {id:'claude-sonnet-4-20250514',name:'Claude Sonnet 4',vision:true},
+  {id:'claude-3-5-haiku-20241022',name:'Claude 3.5 Haiku',vision:true},
+  {id:'deepseek-chat',name:'DeepSeek Chat',vision:false},
+  {id:'deepseek-reasoner',name:'DeepSeek R1',vision:false}
+];
+function init(){lc();rc();if(!cs.length)nc();else lg(cs[0].id);if(!cf.ep||!cf.ak)setTimeout(()=>om('smm'),500);document.getElementById('mnTxt').textContent=cf.md;renderModelMenu();let dbg=localStorage.getItem('pending_debug');if(dbg){localStorage.removeItem('pending_debug');setTimeout(()=>setHiddenRef('debug',dbg,''),300)}setTimeout(showStorageStatus,1000)}
+function renderModelMenu(){let el=document.getElementById('modelMenu');el.innerHTML=PRESET_MODELS.map(m=>`<div class="model-item${cf.md===m.id?' on':''}" onclick="selectModel('${m.id}',${m.vision})">${m.name}${m.vision?' 📷':''}</div>`).join('')+`<div class="model-item" onclick="os()">⚙️ 其他模型...</div>`}
+function toggleModelMenu(){let el=document.getElementById('modelMenu');el.style.display=el.style.display==='none'?'block':'none'}
+function selectModel(id,vision){cf.md=id;cf.vision=vision;localStorage.setItem('md',id);localStorage.setItem('vision',vision?'1':'0');document.getElementById('mnTxt').textContent=id;document.getElementById('vision').checked=vision;renderModelMenu();toggleModelMenu()}
 function closeNativeSplash(){if(window.plus&&plus.navigator)plus.navigator.closeSplashscreen()}
 function lc(){let s=localStorage.getItem('cs');if(s)try{cs=JSON.parse(s)}catch{cs=[]}}
 function sc(){localStorage.setItem('cs',JSON.stringify(cs))}
@@ -288,20 +304,22 @@ function dc(id){cs=cs.filter(x=>x.id!==id);sc();rc();if(cid===id){if(cs.length)l
 function rc(){let el=document.getElementById('cl');if(!cs.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--g4)">暂无对话</div>';return}
 el.innerHTML=cs.map(c=>{let on=c.id===cid?'on':'';return`<div class="ci ${on}" data-id="${c.id}" onclick="lg('${c.id}')"><div class="ct">${eh(c.tt)}</div><div class="cm"><span>${fd(c.ud)}</span><div class="ca"><button class="cb" onclick="event.stopPropagation();sd('${c.id}')">×</button></div></div></div>`}).join('')}
 function rm(ms){let el=document.getElementById('ch');if(!ms.length){el.innerHTML='<div class="em"><div class="ei">○</div><div class="et">开始对话</div></div>';return}
-let h='';ms.forEach((m,i)=>{let t=new Date(m.tm).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});let av=m.rl==='user'?'●':'○';let rb=m.cr?`<button class="rb" onclick="rmg(${i})">重试</button>`:'';let qa=`<span class="msg-actions"><button class="msg-act" onclick="quoteMsg(${i})">引用</button></span>`;let imgs=renderImages(m.imgs);h+=`<div class="mg ${m.rl}"><div class="av">${av}</div><div class="mcc"><div class="bb">${renderMsg(m.ct,m.rl,i)}${imgs}</div><div class="mf">${t}${qa}${rb}</div></div></div>`;if(i<ms.length-1)h+='<div class="dv"></div>'});el.innerHTML=h;el.scrollTop=el.scrollHeight}
+let h='';ms.forEach((m,i)=>{let t=new Date(m.tm).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});let av=m.rl==='user'?'●':'○';let rb=m.cr?`<button class="rb" onclick="rmg(${i})">重试</button>`:'';let cb=m.stopped?`<button class="rb" onclick="continueGenerate()">继续</button>`:'';let qa=`<span class="msg-actions"><button class="msg-act" onclick="copyMsg(${i})">复制</button><button class="msg-act" onclick="quoteMsg(${i})">引用</button></span>`;let imgs=renderImages(m.imgs);h+=`<div class="mg ${m.rl}"><div class="av">${av}</div><div class="mcc"><div class="bb">${renderMsg(m.ct,m.rl,i)}${imgs}</div><div class="mf">${t}${qa}${rb}${cb}</div></div></div>`;if(i<ms.length-1)h+='<div class="dv"></div>'});el.innerHTML=h;el.scrollTop=el.scrollHeight}
+function copyMsg(i){let c=cs.find(x=>x.id===cid);if(!c||!c.ms[i])return;let txt=c.ms[i].ct;navigator.clipboard.writeText(txt).then(()=>info('已复制')).catch(()=>{let ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();info('已复制')})}
 async function sm(){if(sg){stopStream();return}if(!cid)return;let ip=document.getElementById('ip'),btn=document.getElementById('btn'),tx=ip.value.trim(),imgs=pendingImages.slice();if(!tx&&!imgs.length)return;if(!cf.ep||!cf.ak){om('smm');return}if(imgs.length&&!cf.vision){info('当前模型未开启“支持图片输入”。请到设置里开启，或切换支持视觉的模型。');return}
 let visibleTx=tx||'请分析这张图片。',apiTx=buildSendText(visibleTx),apiContent=buildApiContent(apiTx,imgs);
 let storedImgs=imgs.map(x=>({name:x.name,type:x.type,data:x.thumb||x.data}));
 sg=true;btn.disabled=true;ip.value='';quoteRef=null;clearPendingImages();am('user',visibleTx,false,false,apiContent,storedImgs);let c=cs.find(x=>x.id===cid);if(c&&c.ms.length===1){c.tt=visibleTx.substring(0,30)+(visibleTx.length>30?'...':'');sc();rc();document.getElementById('tt').textContent=c.tt}
 st();btn.disabled=false;btn.textContent='■';rt=0;await ca();sg=false;aborter=null;btn.textContent='→';btn.disabled=false}
-async function ca(){let c=cs.find(x=>x.id===cid);if(!c)return;let ams=buildContextMessages(c.ms),aiIndex=am('assistant','',false,false,null,[]);
+async function ca(){let c=cs.find(x=>x.id===cid);if(!c)return;let ams=buildContextMessages(c.ms),aiIndex=am('assistant','',false,false,null,[]);lastAms=ams;lastAiIdx=aiIndex;
 while(rt<3){try{aborter=new AbortController();let r=await fetch(cf.ep+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cf.ak},body:JSON.stringify({model:cf.md,max_tokens:4096,stream:true,messages:ams}),signal:aborter.signal});
 if(!r.ok){let raw=await r.text(),d=null;try{d=raw?JSON.parse(raw):null}catch{};throw new Error(apiErrorText(r.status,d,raw))}
-let ct=r.headers.get('content-type')||'';if(r.body&&ct.includes('text/event-stream'))await readStream(r,aiIndex);else await readJsonFallback(r,aiIndex);ht();sc();rm(c.ms);let lastUser=c.ms[c.ms.length-2]?.ct||'',lastAi=c.ms[c.ms.length-1]?.ct||'';await autoExtractMemory(lastUser,lastAi);await checkAndCompact(c);return}catch(e){if(e.name==='AbortError'){ht();updateMsg(aiIndex,'（已停止生成）',true);return}rt++;if(rt<3)await sl(1000*rt);else{ht();updateMsg(aiIndex,'请求失败：'+(e.message||e),false,true)}}}}
+let ct=r.headers.get('content-type')||'';if(r.body&&ct.includes('text/event-stream'))await readStream(r,aiIndex);else await readJsonFallback(r,aiIndex);ht();sc();rm(c.ms);let lastUser=c.ms[c.ms.length-2]?.ct||'',lastAi=c.ms[c.ms.length-1]?.ct||'';await autoExtractMemory(lastUser,lastAi);await checkAndCompact(c);lastAms=null;lastAiIdx=-1;return}catch(e){if(e.name==='AbortError'){ht();updateMsg(aiIndex,'（已停止）',true);let c=cs.find(x=>x.id===cid);if(c&&c.ms[aiIndex])c.ms[aiIndex].stopped=true;sc();return}rt++;if(rt<3)await sl(1000*rt);else{ht();updateMsg(aiIndex,'请求失败：'+(e.message||e),false,true)}}}}
 async function rmg(i){let c=cs.find(x=>x.id===cid);if(!c||sg)return;c.ms=c.ms.slice(0,i);sc();rm(c.ms);if(c.ms.length&&c.ms[c.ms.length-1].rl==='user'){sg=true;document.getElementById('btn').textContent='■';st();rt=0;await ca();sg=false;aborter=null;document.getElementById('btn').textContent='→'}}
 function am(r,c,e,cr,api,imgs){let f=cs.find(x=>x.id===cid);if(!f)return -1;f.ms.push({rl:r,ct:c,api:api,imgs:imgs||[],tm:new Date().toISOString(),cr:cr});f.ud=new Date().toISOString();sc();rm(f.ms);return f.ms.length-1}
 function updateMsg(i,txt,append,cr){let f=cs.find(x=>x.id===cid);if(!f||!f.ms[i])return;if(append)f.ms[i].ct+=txt;else f.ms[i].ct=txt;if(cr!==undefined)f.ms[i].cr=cr;f.ud=new Date().toISOString();sc();rm(f.ms)}
 function stopStream(){if(aborter)aborter.abort()}
+async function continueGenerate(){if(sg||!lastAms||lastAiIdx<0)return;let c=cs.find(x=>x.id===cid);if(!c)return;sg=true;document.getElementById('btn').textContent='■';st();rt=0;aborter=new AbortController();try{let r=await fetch(cf.ep+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cf.ak},body:JSON.stringify({model:cf.md,max_tokens:4096,stream:true,messages:lastAms}),signal:aborter.signal});if(!r.ok){let raw=await r.text(),d=null;try{d=raw?JSON.parse(raw):null}catch{};throw new Error(apiErrorText(r.status,d,raw))}let ct=r.headers.get('content-type')||'';if(r.body&&ct.includes('text/event-stream'))await readStream(r,lastAiIdx);else await readJsonFallback(r,lastAiIdx);ht();sc();rm(c.ms);lastAms=null;lastAiIdx=-1}catch(e){if(e.name==='AbortError'){ht();return}rt++;if(rt<3)await sl(1000*rt);else{ht();info('继续生成失败')}}sg=false;aborter=null;document.getElementById('btn').textContent='→'}
 // ========== 三层上下文架构 ==========
 function estimateTokens(text){
   if(!text)return 0;
@@ -589,7 +607,8 @@ function sd(id){del=id;om('dm')}
 function cd(){if(del)dc(del);cm('dm');del=null}
 function fd(d){let dt=new Date(d),df=new Date()-dt;if(df<60000)return '刚刚';if(df<3600000)return Math.floor(df/60000)+'分钟前';if(df<86400000)return Math.floor(df/3600000)+'小时前';return dt.toLocaleDateString('zh-CN')}
 function eh(t){let d=document.createElement('div');d.textContent=t;return d.innerHTML.replace(/\n/g,'<br>')}
-function renderMsg(t,role,mi){if(role!=='assistant')return eh(t);let out='',last=0,idx=0,re=/```([\w+-]*)\n?([\s\S]*?)```/g,m;while((m=re.exec(t))){out+=eh(t.slice(last,m.index));let lang=(m[1]||'text').trim()||'text',code=m[2]||'';out+=`<div class="code-card"><div class="code-head"><span>${eh(lang)}</span><div class="code-actions"><button class="code-send" onclick="sendCodeToEditor(${mi},${idx},'new')">新建文件</button><button class="code-send" onclick="sendCodeToEditor(${mi},${idx},'replace')">替换当前</button></div></div><pre><code>${eh(code)}</code></pre></div>`;last=re.lastIndex;idx++}out+=eh(t.slice(last));return out}
+function renderMsg(t,role,mi){if(role!=='assistant')return eh(t);let out='',last=0,idx=0,re=/```([\w+-]*)\n?([\s\S]*?)```/g,m;while((m=re.exec(t))){out+=eh(t.slice(last,m.index));let lang=(m[1]||'text').trim()||'text',code=m[2]||'';out+=`<div class="code-card"><div class="code-head"><span>${eh(lang)}</span><div class="code-actions"><button class="code-send" onclick="copyCode(${mi},${idx})">复制</button><button class="code-send" onclick="sendCodeToEditor(${mi},${idx},'new')">新建</button><button class="code-send" onclick="sendCodeToEditor(${mi},${idx},'replace')">替换</button></div></div><pre><code>${eh(code)}</code></pre></div>`;last=re.lastIndex;idx++}out+=eh(t.slice(last));return out}
+function copyCode(mi,bi){let c=cs.find(x=>x.id===cid);if(!c)return;let b=codeBlocks(c.ms[mi]?.ct||'')[bi];if(!b)return;navigator.clipboard.writeText(b.code).then(()=>info('代码已复制')).catch(()=>{let ta=document.createElement('textarea');ta.value=b.code;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();info('代码已复制')})}
 function codeBlocks(t){let arr=[],re=/```([\w+-]*)\n?([\s\S]*?)```/g,m;while((m=re.exec(t)))arr.push({lang:(m[1]||'text').trim()||'text',code:m[2]||''});return arr}
 function sendCodeToEditor(mi,bi,mode){let c=cs.find(x=>x.id===cid);if(!c)return;let msg=c.ms[mi];if(!msg)return;let b=codeBlocks(msg.ct)[bi];if(!b)return;localStorage.setItem('pending_editor_code',JSON.stringify({lang:b.lang,code:b.code,mode:mode||'new',source:'chat',created:new Date().toISOString()}));location.href='editor.html'}
 function renderImages(imgs){if(!imgs||!imgs.length)return '';return `<div class="img-grid">${imgs.map(x=>`<img class="msg-img" src="${x.data}" alt="${eh(x.name||'图片')}">`).join('')}</div>`}
@@ -659,6 +678,7 @@ document.getElementById('imgInput').addEventListener('change',e=>addImageFiles(e
 document.addEventListener('paste',e=>{let files=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(files.length)addImageFiles(files)});
 document.getElementById('smm').addEventListener('click',e=>{if(e.target.id==='smm')cm('smm')});
 document.getElementById('dm').addEventListener('click',e=>{if(e.target.id==='dm')cm('dm')});
+document.addEventListener('click',e=>{if(!e.target.closest('#mn'))document.getElementById('modelMenu').style.display='none'});
 window.onload=()=>{init();closeNativeSplash()};
 document.addEventListener('plusready',closeNativeSplash);
 </script>
