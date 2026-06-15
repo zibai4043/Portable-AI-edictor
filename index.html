@@ -249,6 +249,9 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 .model-item{padding:10px 14px;cursor:pointer;font-size:13px;transition:background 0.2s}
 .model-item:hover{background:var(--g1)}
 .model-item.on{background:var(--g1);font-weight:600}
+.more-item{padding:10px 14px;cursor:pointer;font-size:13px;transition:background 0.2s;display:flex;align-items:center;gap:8px}
+.more-item:hover{background:var(--g1)}
+.more-item-icon{font-size:14px}
 @media(max-width:768px){
   .ia{padding:18px 14px 24px}
   .iw{border-radius:18px;padding-left:16px}
@@ -270,24 +273,18 @@ body{font-family:-apple-system,sans-serif;background:var(--g1);display:flex;colo
 <div class="cl" id="cl"></div>
 <div class="sb-f">
   <button class="st" onclick="os()">⚙️ 设置</button>
-  <div style="display:flex;gap:6px;margin-top:8px">
-    <button class="st" style="flex:1;font-size:12px;padding:8px 6px" onclick="openCtxPanel()">上下文</button>
-    <button class="st" style="flex:1;font-size:12px;padding:8px 6px" onclick="openSearch()">搜索</button>
-  </div>
-  <div style="display:flex;gap:6px;margin-top:6px">
-    <button class="st" style="flex:1;font-size:12px;padding:8px 6px" onclick="openUsage()">用量</button>
-    <button class="st" style="flex:1;font-size:12px;padding:8px 6px" onclick="openExport()">导出</button>
-  </div>
-  <div style="display:flex;gap:6px;margin-top:6px">
-    <button class="st" style="flex:1;font-size:12px;padding:8px 6px" onclick="importData()">导入</button>
-    <button class="st" style="flex:1;font-size:12px;padding:8px 6px" onclick="openClaudeMonitor()">监控</button>
-  </div>
-  <button class="st" style="margin-top:6px" onclick="location.href='editor.html'">📝 代码编辑器</button>
+  <button class="st" style="margin-top:8px" onclick="openSearch()">🔍 搜索</button>
 </div>
 </div>
 <button class="tg" id="tg" onclick="ts()"><span></span></button>
 <div class="mn">
-<div class="hd"><div class="tt" id="tt">新对话</div><div class="mb" id="mn" onclick="toggleModelMenu()"><span id="mnTxt">GLM-5.1</span> ▾<div id="modelMenu" style="display:none;position:absolute;top:100%;right:0;background:var(--w);border:1px solid var(--g2);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:160px;z-index:10"></div></div></div>
+<div class="hd">
+  <div class="tt" id="tt">新对话</div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <div class="mb" id="mn" onclick="toggleModelMenu()"><span id="mnTxt">GLM-5.1</span> ▾<div id="modelMenu" style="display:none;position:absolute;top:100%;right:0;background:var(--w);border:1px solid var(--g2);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:160px;z-index:10"></div></div>
+    <div class="mb" onclick="toggleMoreMenu()" style="padding:4px 10px">⋯<div id="moreMenu" style="display:none;position:absolute;top:100%;right:0;background:var(--w);border:1px solid var(--g2);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);min-width:180px;z-index:10"></div></div>
+  </div>
+</div>
 <div class="ch" id="ch"><div class="em"><div class="ei">○</div><div class="et">开始对话</div></div></div>
 <div class="tp" id="tp"><div class="av">○</div><div class="ttt">正在输入...</div></div>
 <div class="ia"><div class="img-preview" id="imgPrev"></div><div class="iw"><button class="attach-btn" onclick="document.getElementById('imgInput').click()">＋</button><button class="attach-btn camera-btn" onclick="takePhoto()">拍</button><textarea id="ip" placeholder="输入消息..." rows="1"></textarea><input id="imgInput" type="file" accept="image/*" multiple style="display:none"><button class="sd" id="btn" onclick="sm()">→</button></div></div>
@@ -357,7 +354,16 @@ const PRESET_MODELS=[
 ];
 function init(){lc();rc();if(!cs.length)nc();else lg(cs[0].id);if(!cf.ep||!cf.ak)setTimeout(()=>om('smm'),500);document.getElementById('mnTxt').textContent=cf.md;renderModelMenu();let dbg=localStorage.getItem('pending_debug');if(dbg){localStorage.removeItem('pending_debug');setTimeout(()=>setHiddenRef('debug',dbg,''),300)}setTimeout(showStorageStatus,1000)}
 function renderModelMenu(){let el=document.getElementById('modelMenu');el.innerHTML=PRESET_MODELS.map(m=>`<div class="model-item${cf.md===m.id?' on':''}" onclick="selectModel('${m.id}',${m.vision})">${m.name}${m.vision?' 📷':''}</div>`).join('')+`<div class="model-item" onclick="os()">⚙️ 其他模型...</div>`}
-function toggleModelMenu(){let el=document.getElementById('modelMenu');el.style.display=el.style.display==='none'?'block':'none'}
+function toggleModelMenu(){let el=document.getElementById('modelMenu');el.style.display=el.style.display==='none'?'block':'none';document.getElementById('moreMenu').style.display='none'}
+function toggleMoreMenu(){let el=document.getElementById('moreMenu');el.style.display=el.style.display==='none'?'block':'none';renderMoreMenu();document.getElementById('modelMenu').style.display='none'}
+function renderMoreMenu(){let el=document.getElementById('moreMenu');el.innerHTML=`
+  <div class="more-item" onclick="cm('moreMenu');openCtxPanel()"><span class="more-item-icon">📋</span>上下文管理</div>
+  <div class="more-item" onclick="cm('moreMenu');openUsage()"><span class="more-item-icon">📊</span>用量统计</div>
+  <div class="more-item" onclick="cm('moreMenu');openExport()"><span class="more-item-icon">📤</span>导出对话</div>
+  <div class="more-item" onclick="cm('moreMenu');importData()"><span class="more-item-icon">📥</span>导入备份</div>
+  <div class="more-item" onclick="cm('moreMenu');openClaudeMonitor()"><span class="more-item-icon">🖥️</span>远程监控</div>
+  <div class="more-item" onclick="cm('moreMenu');location.href='editor.html'"><span class="more-item-icon">📝</span>代码编辑器</div>
+`}
 function selectModel(id,vision){cf.md=id;cf.vision=vision;localStorage.setItem('md',id);localStorage.setItem('vision',vision?'1':'0');document.getElementById('mnTxt').textContent=id;document.getElementById('vision').checked=vision;renderModelMenu();toggleModelMenu()}
 function closeNativeSplash(){if(window.plus&&plus.navigator)plus.navigator.closeSplashscreen()}
 function lc(){let s=localStorage.getItem('cs');if(s)try{cs=JSON.parse(s)}catch{cs=[]}}
@@ -742,7 +748,10 @@ document.getElementById('imgInput').addEventListener('change',e=>addImageFiles(e
 document.addEventListener('paste',e=>{let files=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(files.length)addImageFiles(files)});
 document.getElementById('smm').addEventListener('click',e=>{if(e.target.id==='smm')cm('smm')});
 document.getElementById('dm').addEventListener('click',e=>{if(e.target.id==='dm')cm('dm')});
-document.addEventListener('click',e=>{if(!e.target.closest('#mn'))document.getElementById('modelMenu').style.display='none'});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#mn'))document.getElementById('modelMenu').style.display='none';
+  if(!e.target.closest('.mb'))document.getElementById('moreMenu').style.display='none'
+});
 window.onload=()=>{init();closeNativeSplash()};
 document.addEventListener('plusready',closeNativeSplash);
 
